@@ -1,10 +1,12 @@
 "use client"
 
 import { useState } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
+import { Plus, Search, Filter, Edit, Trash2, Package, X } from "lucide-react"
 import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Sidebar } from "@/components/sidebar"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
   Dialog,
@@ -18,582 +20,615 @@ import {
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog"
-import { Sidebar } from "@/components/sidebar"
-import { toast } from "sonner"
 
-interface Product {
-  id: number
-  name: string
-  category: string
-  price: number
-  stock: number
-  status: "active" | "inactive" | "low_stock"
-  supplier: string
-  sku: string
-  description: string
-}
+const initialProducts = [
+  {
+    id: 1,
+    name: "iPhone 15 Pro 256GB",
+    reference: "IPH15P256",
+    category: "Smartphones",
+    stock: 25,
+    price: 1199.99,
+    supplier: "Apple Inc.",
+    status: "active",
+    description: "Dernier iPhone avec puce A17 Pro",
+  },
+  {
+    id: 2,
+    name: "Dell XPS 13",
+    reference: "DELLXPS13",
+    category: "Ordinateurs",
+    stock: 12,
+    price: 1299.99,
+    supplier: "Dell Technologies",
+    status: "active",
+    description: "Ultrabook haute performance",
+  },
+  {
+    id: 3,
+    name: "Samsung Galaxy S23",
+    reference: "SAMS23",
+    category: "Smartphones",
+    stock: 8,
+    price: 899.99,
+    supplier: "Samsung",
+    status: "low_stock",
+    description: "Smartphone Android premium",
+  },
+  {
+    id: 4,
+    name: "MacBook Air M2",
+    reference: "MBAM2",
+    category: "Ordinateurs",
+    stock: 0,
+    price: 1499.99,
+    supplier: "Apple Inc.",
+    status: "out_of_stock",
+    description: "MacBook avec puce M2",
+  },
+]
 
 export default function ProductsPage() {
-  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [products, setProducts] = useState(initialProducts)
   const [searchTerm, setSearchTerm] = useState("")
   const [categoryFilter, setCategoryFilter] = useState("all")
   const [statusFilter, setStatusFilter] = useState("all")
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
-  const [editingProduct, setEditingProduct] = useState<Product | null>(null)
-  const [newProduct, setNewProduct] = useState({
+  const [showFilters, setShowFilters] = useState(false)
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false)
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
+  const [selectedProduct, setSelectedProduct] = useState(null)
+  const [formData, setFormData] = useState({
     name: "",
+    reference: "",
     category: "",
-    price: "",
     stock: "",
+    price: "",
     supplier: "",
-    sku: "",
     description: "",
   })
 
-  const [products, setProducts] = useState<Product[]>([
-    {
-      id: 1,
-      name: "iPhone 14 Pro",
-      category: "Smartphones",
-      price: 1199,
-      stock: 25,
-      status: "active",
-      supplier: "Apple Inc.",
-      sku: "IPH14P-128",
-      description: "Smartphone haut de gamme avec puce A16 Bionic",
-    },
-    {
-      id: 2,
-      name: "Samsung Galaxy S23",
-      category: "Smartphones",
-      price: 899,
-      stock: 8,
-      status: "low_stock",
-      supplier: "Samsung Electronics",
-      sku: "SGS23-256",
-      description: "Smartphone Android avec appareil photo 50MP",
-    },
-    {
-      id: 3,
-      name: "MacBook Pro M2",
-      category: "Ordinateurs",
-      price: 2499,
-      stock: 15,
-      status: "active",
-      supplier: "Apple Inc.",
-      sku: "MBP-M2-14",
-      description: "Ordinateur portable professionnel avec puce M2",
-    },
-    {
-      id: 4,
-      name: "Dell XPS 13",
-      category: "Ordinateurs",
-      price: 1299,
-      stock: 0,
-      status: "inactive",
-      supplier: "Dell Technologies",
-      sku: "XPS13-I7",
-      description: "Ultrabook compact et performant",
-    },
-    {
-      id: 5,
-      name: "iPad Air",
-      category: "Tablettes",
-      price: 649,
-      stock: 32,
-      status: "active",
-      supplier: "Apple Inc.",
-      sku: "IPAD-AIR-64",
-      description: "Tablette polyvalente pour le travail et les loisirs",
-    },
-  ])
+  const categories = ["Smartphones", "Ordinateurs", "Tablettes", "Accessoires"]
+  const suppliers = ["Apple Inc.", "Samsung", "Dell Technologies", "HP", "Lenovo"]
 
-  const categories = ["all", "Smartphones", "Ordinateurs", "Tablettes", "Accessoires"]
-  const statuses = ["all", "active", "inactive", "low_stock"]
-  const suppliers = ["Apple Inc.", "Samsung Electronics", "Dell Technologies", "HP Inc.", "Lenovo"]
+  const getStatusBadge = (status, stock) => {
+    if (status === "out_of_stock" || stock === 0) {
+      return <Badge variant="destructive">Rupture</Badge>
+    }
+    if (status === "low_stock" || stock < 10) {
+      return <Badge className="bg-orange-100 text-orange-800">Stock faible</Badge>
+    }
+    return <Badge className="bg-green-100 text-green-800">En stock</Badge>
+  }
 
   const filteredProducts = products.filter((product) => {
     const matchesSearch =
       product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.sku.toLowerCase().includes(searchTerm.toLowerCase())
+      product.reference.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      product.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      product.supplier.toLowerCase().includes(searchTerm.toLowerCase())
+
     const matchesCategory = categoryFilter === "all" || product.category === categoryFilter
-    const matchesStatus = statusFilter === "all" || product.status === statusFilter
+    const matchesStatus =
+      statusFilter === "all" ||
+      (statusFilter === "in_stock" && product.stock > 10) ||
+      (statusFilter === "low_stock" && product.stock > 0 && product.stock <= 10) ||
+      (statusFilter === "out_of_stock" && product.stock === 0)
+
     return matchesSearch && matchesCategory && matchesStatus
   })
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "active":
-        return { variant: "default" as const, label: "Actif", icon: "✅" }
-      case "inactive":
-        return { variant: "secondary" as const, label: "Inactif", icon: "❌" }
-      case "low_stock":
-        return { variant: "destructive" as const, label: "Stock faible", icon: "⚠️" }
-      default:
-        return { variant: "secondary" as const, label: "Inconnu", icon: "❓" }
-    }
-  }
-
-  const handleAddProduct = () => {
-    if (!newProduct.name || !newProduct.category || !newProduct.price || !newProduct.stock) {
-      toast.error("Veuillez remplir tous les champs obligatoires")
-      return
-    }
-
-    const product: Product = {
-      id: Math.max(...products.map((p) => p.id)) + 1,
-      name: newProduct.name,
-      category: newProduct.category,
-      price: Number.parseFloat(newProduct.price),
-      stock: Number.parseInt(newProduct.stock),
-      status: Number.parseInt(newProduct.stock) > 10 ? "active" : "low_stock",
-      supplier: newProduct.supplier,
-      sku: newProduct.sku,
-      description: newProduct.description,
-    }
-
-    setProducts([...products, product])
-    setNewProduct({ name: "", category: "", price: "", stock: "", supplier: "", sku: "", description: "" })
-    setIsAddDialogOpen(false)
-    toast.success("Produit ajouté avec succès")
-  }
-
-  const handleEditProduct = (product: Product) => {
-    setEditingProduct(product)
-    setNewProduct({
-      name: product.name,
-      category: product.category,
-      price: product.price.toString(),
-      stock: product.stock.toString(),
-      supplier: product.supplier,
-      sku: product.sku,
-      description: product.description,
+  const resetForm = () => {
+    setFormData({
+      name: "",
+      reference: "",
+      category: "",
+      stock: "",
+      price: "",
+      supplier: "",
+      description: "",
     })
   }
 
-  const handleUpdateProduct = () => {
-    if (!editingProduct || !newProduct.name || !newProduct.category || !newProduct.price || !newProduct.stock) {
-      toast.error("Veuillez remplir tous les champs obligatoires")
-      return
-    }
-
-    const updatedProduct: Product = {
-      ...editingProduct,
-      name: newProduct.name,
-      category: newProduct.category,
-      price: Number.parseFloat(newProduct.price),
-      stock: Number.parseInt(newProduct.stock),
+  const handleAdd = () => {
+    const newProduct = {
+      id: Math.max(...products.map((p) => p.id)) + 1,
+      ...formData,
+      stock: Number.parseInt(formData.stock),
+      price: Number.parseFloat(formData.price),
       status:
-        Number.parseInt(newProduct.stock) > 10
-          ? "active"
-          : Number.parseInt(newProduct.stock) === 0
-            ? "inactive"
-            : "low_stock",
-      supplier: newProduct.supplier,
-      sku: newProduct.sku,
-      description: newProduct.description,
+        Number.parseInt(formData.stock) === 0
+          ? "out_of_stock"
+          : Number.parseInt(formData.stock) <= 10
+            ? "low_stock"
+            : "active",
     }
-
-    setProducts(products.map((p) => (p.id === editingProduct.id ? updatedProduct : p)))
-    setEditingProduct(null)
-    setNewProduct({ name: "", category: "", price: "", stock: "", supplier: "", sku: "", description: "" })
-    toast.success("Produit modifié avec succès")
+    setProducts([...products, newProduct])
+    setIsAddModalOpen(false)
+    resetForm()
   }
 
-  const handleDeleteProduct = (id: number) => {
-    setProducts(products.filter((p) => p.id !== id))
-    toast.success("Produit supprimé avec succès")
+  const handleEdit = (product) => {
+    setSelectedProduct(product)
+    setFormData({
+      name: product.name,
+      reference: product.reference,
+      category: product.category,
+      stock: product.stock.toString(),
+      price: product.price.toString(),
+      supplier: product.supplier,
+      description: product.description,
+    })
+    setIsEditModalOpen(true)
   }
 
-  const exportToExcel = () => {
-    const csvContent = [
-      ["Nom", "Catégorie", "Prix", "Stock", "Statut", "Fournisseur", "SKU", "Description"],
-      ...filteredProducts.map((product) => [
-        product.name,
-        product.category,
-        product.price.toString(),
-        product.stock.toString(),
-        product.status,
-        product.supplier,
-        product.sku,
-        product.description,
-      ]),
-    ]
-      .map((row) => row.join(","))
-      .join("\n")
+  const handleUpdate = () => {
+    const updatedProducts = products.map((p) =>
+      p.id === selectedProduct.id
+        ? {
+            ...p,
+            ...formData,
+            stock: Number.parseInt(formData.stock),
+            price: Number.parseFloat(formData.price),
+            status:
+              Number.parseInt(formData.stock) === 0
+                ? "out_of_stock"
+                : Number.parseInt(formData.stock) <= 10
+                  ? "low_stock"
+                  : "active",
+          }
+        : p,
+    )
+    setProducts(updatedProducts)
+    setIsEditModalOpen(false)
+    resetForm()
+    setSelectedProduct(null)
+  }
 
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
-    const link = document.createElement("a")
-    const url = URL.createObjectURL(blob)
-    link.setAttribute("href", url)
-    link.setAttribute("download", "produits.csv")
-    link.style.visibility = "hidden"
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    toast.success("Export Excel généré avec succès")
+  const handleDelete = (product) => {
+    setSelectedProduct(product)
+    setIsDeleteModalOpen(true)
+  }
+
+  const confirmDelete = () => {
+    setProducts(products.filter((p) => p.id !== selectedProduct.id))
+    setIsDeleteModalOpen(false)
+    setSelectedProduct(null)
   }
 
   return (
-    <div className="flex h-screen bg-gray-50">
-      <Sidebar open={sidebarOpen} setOpen={setSidebarOpen} />
+    <div className="flex min-h-screen bg-gray-50">
+      <Sidebar />
 
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="bg-white shadow-sm border-b border-gray-200 px-4 py-4">
+      <div className="flex-1 flex flex-col">
+        {/* Header */}
+        <header className="bg-white border-b border-gray-200 px-6 py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <Button variant="ghost" size="sm" onClick={() => setSidebarOpen(!sidebarOpen)} className="lg:hidden">
-                ☰
-              </Button>
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">Gestion des produits</h1>
-                <p className="text-sm text-gray-500">Gérez votre catalogue de produits</p>
-              </div>
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Produits</h1>
+              <p className="text-gray-600">Gérez votre catalogue de produits</p>
             </div>
-            <div className="flex items-center space-x-4">
-              <Button variant="outline" size="sm" onClick={exportToExcel}>
-                📊 Exporter Excel
-              </Button>
-              <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button size="sm">➕ Nouveau produit</Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-2xl">
-                  <DialogHeader>
-                    <DialogTitle>Ajouter un nouveau produit</DialogTitle>
-                    <DialogDescription>Remplissez les informations du produit ci-dessous.</DialogDescription>
-                  </DialogHeader>
-                  <div className="grid grid-cols-2 gap-4 py-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="name">Nom du produit *</Label>
-                      <Input
-                        id="name"
-                        value={newProduct.name}
-                        onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
-                        placeholder="Ex: iPhone 14 Pro"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="category">Catégorie *</Label>
-                      <Select
-                        value={newProduct.category}
-                        onValueChange={(value) => setNewProduct({ ...newProduct, category: value })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Sélectionner une catégorie" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {categories
-                            .filter((cat) => cat !== "all")
-                            .map((category) => (
-                              <SelectItem key={category} value={category}>
-                                {category}
-                              </SelectItem>
-                            ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="price">Prix (€) *</Label>
-                      <Input
-                        id="price"
-                        type="number"
-                        value={newProduct.price}
-                        onChange={(e) => setNewProduct({ ...newProduct, price: e.target.value })}
-                        placeholder="0.00"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="stock">Stock initial *</Label>
+            <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
+              <DialogTrigger asChild>
+                <Button className="bg-blue-600 hover:bg-blue-700">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Nouveau produit
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Ajouter un produit</DialogTitle>
+                  <DialogDescription>Créez un nouveau produit dans votre catalogue.</DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="name">Nom du produit</Label>
+                    <Input
+                      id="name"
+                      value={formData.name}
+                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                      placeholder="Ex: iPhone 15 Pro"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="reference">Référence</Label>
+                    <Input
+                      id="reference"
+                      value={formData.reference}
+                      onChange={(e) => setFormData({ ...formData, reference: e.target.value })}
+                      placeholder="Ex: IPH15P"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="category">Catégorie</Label>
+                    <Select
+                      value={formData.category}
+                      onValueChange={(value) => setFormData({ ...formData, category: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Sélectionner une catégorie" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {categories.map((cat) => (
+                          <SelectItem key={cat} value={cat}>
+                            {cat}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="grid gap-2">
+                      <Label htmlFor="stock">Stock</Label>
                       <Input
                         id="stock"
                         type="number"
-                        value={newProduct.stock}
-                        onChange={(e) => setNewProduct({ ...newProduct, stock: e.target.value })}
+                        value={formData.stock}
+                        onChange={(e) => setFormData({ ...formData, stock: e.target.value })}
                         placeholder="0"
                       />
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="supplier">Fournisseur</Label>
-                      <Select
-                        value={newProduct.supplier}
-                        onValueChange={(value) => setNewProduct({ ...newProduct, supplier: value })}
-                      >
+                    <div className="grid gap-2">
+                      <Label htmlFor="price">Prix (€)</Label>
+                      <Input
+                        id="price"
+                        type="number"
+                        step="0.01"
+                        value={formData.price}
+                        onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                        placeholder="0.00"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="supplier">Fournisseur</Label>
+                    <Select
+                      value={formData.supplier}
+                      onValueChange={(value) => setFormData({ ...formData, supplier: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Sélectionner un fournisseur" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {suppliers.map((supplier) => (
+                          <SelectItem key={supplier} value={supplier}>
+                            {supplier}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="description">Description</Label>
+                    <Textarea
+                      id="description"
+                      value={formData.description}
+                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                      placeholder="Description du produit..."
+                    />
+                  </div>
+                </div>
+                <DialogFooter className="flex gap-3 pt-6 border-t">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setIsAddModalOpen(false)
+                      resetForm()
+                    }}
+                    className="flex-1"
+                  >
+                    Annuler
+                  </Button>
+                  <Button
+                    onClick={handleAdd}
+                    className="bg-green-600 hover:bg-green-700 text-white flex-1 font-semibold"
+                    disabled={!formData.name || !formData.reference || !formData.category}
+                  >
+                    ✓ Enregistrer le produit
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </header>
+
+        {/* Main Content */}
+        <main className="flex-1 p-6">
+          {/* Stats Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">Total produits</p>
+                    <p className="text-2xl font-bold">{products.length}</p>
+                  </div>
+                  <Package className="h-8 w-8 text-blue-600" />
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">En stock</p>
+                    <p className="text-2xl font-bold">{products.filter((p) => p.stock > 10).length}</p>
+                  </div>
+                  <div className="h-8 w-8 bg-green-100 rounded-full flex items-center justify-center">
+                    <div className="h-4 w-4 bg-green-600 rounded-full"></div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">Stock faible</p>
+                    <p className="text-2xl font-bold">{products.filter((p) => p.stock > 0 && p.stock <= 10).length}</p>
+                  </div>
+                  <div className="h-8 w-8 bg-orange-100 rounded-full flex items-center justify-center">
+                    <div className="h-4 w-4 bg-orange-600 rounded-full"></div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">Rupture</p>
+                    <p className="text-2xl font-bold">{products.filter((p) => p.stock === 0).length}</p>
+                  </div>
+                  <div className="h-8 w-8 bg-red-100 rounded-full flex items-center justify-center">
+                    <div className="h-4 w-4 bg-red-600 rounded-full"></div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Filters and Search */}
+          <Card className="mb-6">
+            <CardContent className="p-6">
+              <div className="flex flex-col gap-4">
+                <div className="flex flex-col md:flex-row gap-4">
+                  <div className="flex-1">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                      <Input
+                        placeholder="Rechercher un produit..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="pl-10"
+                      />
+                    </div>
+                  </div>
+                  <Button variant="outline" onClick={() => setShowFilters(!showFilters)}>
+                    <Filter className="h-4 w-4 mr-2" />
+                    Filtres
+                    {showFilters && <X className="h-4 w-4 ml-2" />}
+                  </Button>
+                </div>
+
+                {showFilters && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t">
+                    <div>
+                      <Label htmlFor="category-filter">Catégorie</Label>
+                      <Select value={categoryFilter} onValueChange={setCategoryFilter}>
                         <SelectTrigger>
-                          <SelectValue placeholder="Sélectionner un fournisseur" />
+                          <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {suppliers.map((supplier) => (
-                            <SelectItem key={supplier} value={supplier}>
-                              {supplier}
+                          <SelectItem value="all">Toutes les catégories</SelectItem>
+                          {categories.map((cat) => (
+                            <SelectItem key={cat} value={cat}>
+                              {cat}
                             </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="sku">SKU</Label>
-                      <Input
-                        id="sku"
-                        value={newProduct.sku}
-                        onChange={(e) => setNewProduct({ ...newProduct, sku: e.target.value })}
-                        placeholder="Ex: IPH14P-128"
-                      />
-                    </div>
-                    <div className="col-span-2 space-y-2">
-                      <Label htmlFor="description">Description</Label>
-                      <Textarea
-                        id="description"
-                        value={newProduct.description}
-                        onChange={(e) => setNewProduct({ ...newProduct, description: e.target.value })}
-                        placeholder="Description du produit..."
-                        rows={3}
-                      />
+                    <div>
+                      <Label htmlFor="status-filter">Statut</Label>
+                      <Select value={statusFilter} onValueChange={setStatusFilter}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">Tous les statuts</SelectItem>
+                          <SelectItem value="in_stock">En stock</SelectItem>
+                          <SelectItem value="low_stock">Stock faible</SelectItem>
+                          <SelectItem value="out_of_stock">Rupture</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
-                  <DialogFooter>
-                    <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
-                      Annuler
-                    </Button>
-                    <Button onClick={handleAddProduct}>Ajouter le produit</Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-            </div>
-          </div>
-        </header>
+                )}
+              </div>
+            </CardContent>
+          </Card>
 
-        <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-50 p-4">
-          <div className="max-w-7xl mx-auto space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">📦 Catalogue des produits</CardTitle>
-                <CardDescription>{filteredProducts.length} produit(s) trouvé(s)</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-col sm:flex-row gap-4 mb-6">
-                  <div className="flex-1">
-                    <Input
-                      placeholder="🔍 Rechercher par nom ou SKU..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                    />
-                  </div>
-                  <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                    <SelectTrigger className="w-full sm:w-48">
-                      <SelectValue placeholder="Catégorie" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Toutes les catégories</SelectItem>
-                      {categories
-                        .filter((cat) => cat !== "all")
-                        .map((category) => (
-                          <SelectItem key={category} value={category}>
-                            {category}
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
-                  <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger className="w-full sm:w-48">
-                      <SelectValue placeholder="Statut" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Tous les statuts</SelectItem>
-                      <SelectItem value="active">Actif</SelectItem>
-                      <SelectItem value="inactive">Inactif</SelectItem>
-                      <SelectItem value="low_stock">Stock faible</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="rounded-md border">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Produit</TableHead>
-                        <TableHead>Catégorie</TableHead>
-                        <TableHead>Prix</TableHead>
-                        <TableHead>Stock</TableHead>
-                        <TableHead>Statut</TableHead>
-                        <TableHead>Fournisseur</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredProducts.map((product) => {
-                        const statusInfo = getStatusBadge(product.status)
-                        return (
-                          <TableRow key={product.id}>
-                            <TableCell>
-                              <div>
-                                <div className="font-medium">{product.name}</div>
-                                <div className="text-sm text-gray-500">{product.sku}</div>
-                              </div>
-                            </TableCell>
-                            <TableCell>{product.category}</TableCell>
-                            <TableCell>{product.price.toFixed(2)} €</TableCell>
-                            <TableCell>{product.stock}</TableCell>
-                            <TableCell>
-                              <Badge variant={statusInfo.variant}>
-                                {statusInfo.icon} {statusInfo.label}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>{product.supplier}</TableCell>
-                            <TableCell className="text-right">
-                              <div className="flex justify-end space-x-2">
-                                <Dialog>
-                                  <DialogTrigger asChild>
-                                    <Button variant="outline" size="sm" onClick={() => handleEditProduct(product)}>
-                                      ✏️ Modifier
-                                    </Button>
-                                  </DialogTrigger>
-                                  <DialogContent className="max-w-2xl">
-                                    <DialogHeader>
-                                      <DialogTitle>Modifier le produit</DialogTitle>
-                                      <DialogDescription>
-                                        Modifiez les informations du produit ci-dessous.
-                                      </DialogDescription>
-                                    </DialogHeader>
-                                    <div className="grid grid-cols-2 gap-4 py-4">
-                                      <div className="space-y-2">
-                                        <Label htmlFor="edit-name">Nom du produit *</Label>
-                                        <Input
-                                          id="edit-name"
-                                          value={newProduct.name}
-                                          onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
-                                        />
-                                      </div>
-                                      <div className="space-y-2">
-                                        <Label htmlFor="edit-category">Catégorie *</Label>
-                                        <Select
-                                          value={newProduct.category}
-                                          onValueChange={(value) => setNewProduct({ ...newProduct, category: value })}
-                                        >
-                                          <SelectTrigger>
-                                            <SelectValue />
-                                          </SelectTrigger>
-                                          <SelectContent>
-                                            {categories
-                                              .filter((cat) => cat !== "all")
-                                              .map((category) => (
-                                                <SelectItem key={category} value={category}>
-                                                  {category}
-                                                </SelectItem>
-                                              ))}
-                                          </SelectContent>
-                                        </Select>
-                                      </div>
-                                      <div className="space-y-2">
-                                        <Label htmlFor="edit-price">Prix (€) *</Label>
-                                        <Input
-                                          id="edit-price"
-                                          type="number"
-                                          value={newProduct.price}
-                                          onChange={(e) => setNewProduct({ ...newProduct, price: e.target.value })}
-                                        />
-                                      </div>
-                                      <div className="space-y-2">
-                                        <Label htmlFor="edit-stock">Stock *</Label>
-                                        <Input
-                                          id="edit-stock"
-                                          type="number"
-                                          value={newProduct.stock}
-                                          onChange={(e) => setNewProduct({ ...newProduct, stock: e.target.value })}
-                                        />
-                                      </div>
-                                      <div className="space-y-2">
-                                        <Label htmlFor="edit-supplier">Fournisseur</Label>
-                                        <Select
-                                          value={newProduct.supplier}
-                                          onValueChange={(value) => setNewProduct({ ...newProduct, supplier: value })}
-                                        >
-                                          <SelectTrigger>
-                                            <SelectValue />
-                                          </SelectTrigger>
-                                          <SelectContent>
-                                            {suppliers.map((supplier) => (
-                                              <SelectItem key={supplier} value={supplier}>
-                                                {supplier}
-                                              </SelectItem>
-                                            ))}
-                                          </SelectContent>
-                                        </Select>
-                                      </div>
-                                      <div className="space-y-2">
-                                        <Label htmlFor="edit-sku">SKU</Label>
-                                        <Input
-                                          id="edit-sku"
-                                          value={newProduct.sku}
-                                          onChange={(e) => setNewProduct({ ...newProduct, sku: e.target.value })}
-                                        />
-                                      </div>
-                                      <div className="col-span-2 space-y-2">
-                                        <Label htmlFor="edit-description">Description</Label>
-                                        <Textarea
-                                          id="edit-description"
-                                          value={newProduct.description}
-                                          onChange={(e) =>
-                                            setNewProduct({ ...newProduct, description: e.target.value })
-                                          }
-                                          rows={3}
-                                        />
-                                      </div>
-                                    </div>
-                                    <DialogFooter>
-                                      <Button variant="outline" onClick={() => setEditingProduct(null)}>
-                                        Annuler
-                                      </Button>
-                                      <Button onClick={handleUpdateProduct}>Sauvegarder</Button>
-                                    </DialogFooter>
-                                  </DialogContent>
-                                </Dialog>
-                                <AlertDialog>
-                                  <AlertDialogTrigger asChild>
-                                    <Button variant="outline" size="sm">
-                                      🗑️ Supprimer
-                                    </Button>
-                                  </AlertDialogTrigger>
-                                  <AlertDialogContent>
-                                    <AlertDialogHeader>
-                                      <AlertDialogTitle>Confirmer la suppression</AlertDialogTitle>
-                                      <AlertDialogDescription>
-                                        Êtes-vous sûr de vouloir supprimer le produit "{product.name}" ? Cette action
-                                        est irréversible.
-                                      </AlertDialogDescription>
-                                    </AlertDialogHeader>
-                                    <AlertDialogFooter>
-                                      <AlertDialogCancel>Annuler</AlertDialogCancel>
-                                      <AlertDialogAction onClick={() => handleDeleteProduct(product.id)}>
-                                        Supprimer
-                                      </AlertDialogAction>
-                                    </AlertDialogFooter>
-                                  </AlertDialogContent>
-                                </AlertDialog>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        )
-                      })}
-                    </TableBody>
-                  </Table>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+          {/* Products Table */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Liste des produits ({filteredProducts.length})</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Produit</TableHead>
+                    <TableHead>Référence</TableHead>
+                    <TableHead>Catégorie</TableHead>
+                    <TableHead>Stock</TableHead>
+                    <TableHead>Prix</TableHead>
+                    <TableHead>Fournisseur</TableHead>
+                    <TableHead>Statut</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredProducts.map((product) => (
+                    <TableRow key={product.id}>
+                      <TableCell className="font-medium">{product.name}</TableCell>
+                      <TableCell>{product.reference}</TableCell>
+                      <TableCell>{product.category}</TableCell>
+                      <TableCell>{product.stock}</TableCell>
+                      <TableCell>€{product.price}</TableCell>
+                      <TableCell>{product.supplier}</TableCell>
+                      <TableCell>{getStatusBadge(product.status, product.stock)}</TableCell>
+                      <TableCell>
+                        <div className="flex space-x-2">
+                          <Button variant="ghost" size="sm" onClick={() => handleEdit(product)}>
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => handleDelete(product)}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
         </main>
       </div>
+
+      {/* Edit Modal */}
+      <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Modifier le produit</DialogTitle>
+            <DialogDescription>Modifiez les informations du produit.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="edit-name">Nom du produit</Label>
+              <Input
+                id="edit-name"
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="edit-reference">Référence</Label>
+              <Input
+                id="edit-reference"
+                value={formData.reference}
+                onChange={(e) => setFormData({ ...formData, reference: e.target.value })}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="edit-category">Catégorie</Label>
+              <Select
+                value={formData.category}
+                onValueChange={(value) => setFormData({ ...formData, category: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {categories.map((cat) => (
+                    <SelectItem key={cat} value={cat}>
+                      {cat}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="grid gap-2">
+                <Label htmlFor="edit-stock">Stock</Label>
+                <Input
+                  id="edit-stock"
+                  type="number"
+                  value={formData.stock}
+                  onChange={(e) => setFormData({ ...formData, stock: e.target.value })}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-price">Prix (€)</Label>
+                <Input
+                  id="edit-price"
+                  type="number"
+                  step="0.01"
+                  value={formData.price}
+                  onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                />
+              </div>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="edit-supplier">Fournisseur</Label>
+              <Select
+                value={formData.supplier}
+                onValueChange={(value) => setFormData({ ...formData, supplier: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {suppliers.map((supplier) => (
+                    <SelectItem key={supplier} value={supplier}>
+                      {supplier}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="edit-description">Description</Label>
+              <Textarea
+                id="edit-description"
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              />
+            </div>
+          </div>
+          <DialogFooter className="flex gap-3 pt-6 border-t">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsEditModalOpen(false)
+                resetForm()
+                setSelectedProduct(null)
+              }}
+              className="flex-1"
+            >
+              Annuler
+            </Button>
+            <Button
+              onClick={handleUpdate}
+              className="bg-blue-600 hover:bg-blue-700 text-white flex-1 font-semibold"
+              disabled={!formData.name || !formData.reference || !formData.category}
+            >
+              ✓ Enregistrer les modifications
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Modal */}
+      <Dialog open={isDeleteModalOpen} onOpenChange={setIsDeleteModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Supprimer le produit</DialogTitle>
+            <DialogDescription>
+              Êtes-vous sûr de vouloir supprimer "{selectedProduct?.name}" ? Cette action est irréversible.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex gap-3 pt-6 border-t">
+            <Button variant="outline" onClick={() => setIsDeleteModalOpen(false)} className="flex-1">
+              Annuler
+            </Button>
+            <Button variant="destructive" onClick={confirmDelete} className="flex-1 font-semibold">
+              🗑️ Supprimer définitivement
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
