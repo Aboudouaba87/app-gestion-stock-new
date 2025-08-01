@@ -1,7 +1,6 @@
 "use client"
 
 import { useState } from "react"
-import { Plus, Search, Filter, Edit, Trash2, Shield, User, Mail, Phone } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -12,8 +11,20 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
+import { toast } from "sonner"
 
-const users = [
+interface User {
+  id: number
+  name: string
+  email: string
+  phone: string
+  role: string
+  warehouse: string
+  status: "active" | "inactive"
+  lastLogin: string
+}
+
+const users: User[] = [
   {
     id: 1,
     name: "Jean Dupont",
@@ -54,8 +65,26 @@ const roles = [
 ]
 
 export default function UsersPage() {
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
+  const [roleFilter, setRoleFilter] = useState("all")
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+  const [newUser, setNewUser] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    role: "",
+    warehouse: "",
+    status: "active" as "active" | "inactive",
+  })
+
+  const filteredUsers = users.filter((user) => {
+    const matchesSearch =
+      user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      user.email.toLowerCase().includes(searchTerm.toLowerCase())
+    const matchesRole = roleFilter === "all" || user.role === roleFilter
+    return matchesSearch && matchesRole
+  })
 
   const getRoleBadge = (role: string) => {
     const roleInfo = roles.find((r) => r.value === role)
@@ -64,30 +93,42 @@ export default function UsersPage() {
 
   const getStatusBadge = (status: string) => {
     return status === "active" ? (
-      <Badge className="bg-green-100 text-green-800">Actif</Badge>
+      <Badge className="bg-green-100 text-green-800">✅ Actif</Badge>
     ) : (
-      <Badge className="bg-gray-100 text-gray-800">Inactif</Badge>
+      <Badge className="bg-gray-100 text-gray-800">❌ Inactif</Badge>
     )
   }
 
-  return (
-    <div className="flex min-h-screen bg-gray-50">
-      <Sidebar />
+  const handleCreateUser = () => {
+    if (!newUser.name || !newUser.email || !newUser.role || !newUser.warehouse) {
+      toast.error("Veuillez remplir tous les champs obligatoires")
+      return
+    }
 
-      <div className="flex-1 flex flex-col">
-        {/* Header */}
-        <header className="bg-white border-b border-gray-200 px-6 py-4">
+    toast.success("Utilisateur créé avec succès")
+    setIsCreateModalOpen(false)
+    setNewUser({ name: "", email: "", phone: "", role: "", warehouse: "", status: "active" })
+  }
+
+  return (
+    <div className="flex h-screen bg-gray-50">
+      <Sidebar open={sidebarOpen} setOpen={setSidebarOpen} />
+
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <header className="bg-white shadow-sm border-b border-gray-200 px-4 py-4">
           <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">Utilisateurs</h1>
-              <p className="text-gray-600">Gérez les accès et permissions</p>
+            <div className="flex items-center space-x-4">
+              <Button variant="ghost" size="sm" onClick={() => setSidebarOpen(!sidebarOpen)} className="lg:hidden">
+                ☰
+              </Button>
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">Gestion des utilisateurs</h1>
+                <p className="text-sm text-gray-500">Gérez les accès et permissions</p>
+              </div>
             </div>
             <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
               <DialogTrigger asChild>
-                <Button className="bg-blue-600 hover:bg-blue-700">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Nouvel utilisateur
-                </Button>
+                <Button>➕ Nouvel utilisateur</Button>
               </DialogTrigger>
               <DialogContent className="sm:max-w-[425px]">
                 <DialogHeader>
@@ -96,27 +137,43 @@ export default function UsersPage() {
                 <div className="grid gap-4 py-4">
                   <div className="grid grid-cols-4 items-center gap-4">
                     <Label htmlFor="name" className="text-right">
-                      Nom
+                      Nom *
                     </Label>
-                    <Input id="name" className="col-span-3" />
+                    <Input
+                      id="name"
+                      className="col-span-3"
+                      value={newUser.name}
+                      onChange={(e) => setNewUser({ ...newUser, name: e.target.value })}
+                    />
                   </div>
                   <div className="grid grid-cols-4 items-center gap-4">
                     <Label htmlFor="email" className="text-right">
-                      Email
+                      Email *
                     </Label>
-                    <Input id="email" type="email" className="col-span-3" />
+                    <Input
+                      id="email"
+                      type="email"
+                      className="col-span-3"
+                      value={newUser.email}
+                      onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
+                    />
                   </div>
                   <div className="grid grid-cols-4 items-center gap-4">
                     <Label htmlFor="phone" className="text-right">
                       Téléphone
                     </Label>
-                    <Input id="phone" className="col-span-3" />
+                    <Input
+                      id="phone"
+                      className="col-span-3"
+                      value={newUser.phone}
+                      onChange={(e) => setNewUser({ ...newUser, phone: e.target.value })}
+                    />
                   </div>
                   <div className="grid grid-cols-4 items-center gap-4">
                     <Label htmlFor="role" className="text-right">
-                      Rôle
+                      Rôle *
                     </Label>
-                    <Select>
+                    <Select value={newUser.role} onValueChange={(value) => setNewUser({ ...newUser, role: value })}>
                       <SelectTrigger className="col-span-3">
                         <SelectValue placeholder="Sélectionner un rôle" />
                       </SelectTrigger>
@@ -131,9 +188,12 @@ export default function UsersPage() {
                   </div>
                   <div className="grid grid-cols-4 items-center gap-4">
                     <Label htmlFor="warehouse" className="text-right">
-                      Entrepôt
+                      Entrepôt *
                     </Label>
-                    <Select>
+                    <Select
+                      value={newUser.warehouse}
+                      onValueChange={(value) => setNewUser({ ...newUser, warehouse: value })}
+                    >
                       <SelectTrigger className="col-span-3">
                         <SelectValue placeholder="Sélectionner un entrepôt" />
                       </SelectTrigger>
@@ -148,155 +208,142 @@ export default function UsersPage() {
                     <Label htmlFor="active" className="text-right">
                       Actif
                     </Label>
-                    <Switch id="active" className="col-span-3" />
+                    <Switch
+                      id="active"
+                      className="col-span-3"
+                      checked={newUser.status === "active"}
+                      onCheckedChange={(checked) => setNewUser({ ...newUser, status: checked ? "active" : "inactive" })}
+                    />
                   </div>
                 </div>
                 <div className="flex justify-end space-x-2">
                   <Button variant="outline" onClick={() => setIsCreateModalOpen(false)}>
                     Annuler
                   </Button>
-                  <Button onClick={() => setIsCreateModalOpen(false)}>Créer</Button>
+                  <Button onClick={handleCreateUser}>Créer</Button>
                 </div>
               </DialogContent>
             </Dialog>
           </div>
         </header>
 
-        {/* Main Content */}
-        <main className="flex-1 p-6">
-          {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">Total utilisateurs</p>
-                    <p className="text-2xl font-bold">24</p>
+        <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-50 p-4">
+          <div className="max-w-7xl mx-auto space-y-6">
+            {/* Stats Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">Total utilisateurs</p>
+                      <p className="text-2xl font-bold">24</p>
+                    </div>
+                    <span className="text-2xl">👥</span>
                   </div>
-                  <User className="h-8 w-8 text-blue-600" />
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">Actifs</p>
-                    <p className="text-2xl font-bold">21</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">Actifs</p>
+                      <p className="text-2xl font-bold">21</p>
+                    </div>
+                    <span className="text-2xl">✅</span>
                   </div>
-                  <div className="h-8 w-8 bg-green-100 rounded-full flex items-center justify-center">
-                    <div className="h-4 w-4 bg-green-600 rounded-full"></div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">Administrateurs</p>
+                      <p className="text-2xl font-bold">3</p>
+                    </div>
+                    <span className="text-2xl">🛡️</span>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">Administrateurs</p>
-                    <p className="text-2xl font-bold">3</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">Connectés aujourd'hui</p>
+                      <p className="text-2xl font-bold">18</p>
+                    </div>
+                    <span className="text-2xl">🟢</span>
                   </div>
-                  <Shield className="h-8 w-8 text-red-600" />
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">Connectés aujourd'hui</p>
-                    <p className="text-2xl font-bold">18</p>
-                  </div>
-                  <div className="h-8 w-8 bg-purple-100 rounded-full flex items-center justify-center">
-                    <div className="h-4 w-4 bg-purple-600 rounded-full"></div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+                </CardContent>
+              </Card>
+            </div>
 
-          {/* Filters */}
-          <Card className="mb-6">
-            <CardContent className="p-6">
-              <div className="flex flex-col md:flex-row gap-4">
-                <div className="flex-1">
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+            {/* Filters */}
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex flex-col md:flex-row gap-4">
+                  <div className="flex-1">
                     <Input
-                      placeholder="Rechercher un utilisateur..."
+                      placeholder="🔍 Rechercher un utilisateur..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
-                      className="pl-10"
                     />
                   </div>
+                  <Select value={roleFilter} onValueChange={setRoleFilter}>
+                    <SelectTrigger className="w-48">
+                      <SelectValue placeholder="Filtrer par rôle" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Tous les rôles</SelectItem>
+                      {roles.map((role) => (
+                        <SelectItem key={role.value} value={role.value}>
+                          {role.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-                <Select>
-                  <SelectTrigger className="w-48">
-                    <SelectValue placeholder="Filtrer par rôle" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Tous les rôles</SelectItem>
-                    {roles.map((role) => (
-                      <SelectItem key={role.value} value={role.value}>
-                        {role.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Button variant="outline">
-                  <Filter className="h-4 w-4 mr-2" />
-                  Plus de filtres
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
 
-          {/* Users Table */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Liste des utilisateurs</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Utilisateur</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Téléphone</TableHead>
-                    <TableHead>Rôle</TableHead>
-                    <TableHead>Entrepôt</TableHead>
-                    <TableHead>Statut</TableHead>
-                    <TableHead>Dernière connexion</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {users
-                    .filter(
-                      (user) =>
-                        user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                        user.email.toLowerCase().includes(searchTerm.toLowerCase()),
-                    )
-                    .map((user) => (
+            {/* Users Table */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">👥 Liste des utilisateurs</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Utilisateur</TableHead>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Téléphone</TableHead>
+                      <TableHead>Rôle</TableHead>
+                      <TableHead>Entrepôt</TableHead>
+                      <TableHead>Statut</TableHead>
+                      <TableHead>Dernière connexion</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredUsers.map((user) => (
                       <TableRow key={user.id}>
                         <TableCell>
                           <div className="flex items-center space-x-3">
                             <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                              <User className="h-4 w-4 text-blue-600" />
+                              <span className="text-sm">👤</span>
                             </div>
                             <span className="font-medium">{user.name}</span>
                           </div>
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center space-x-2">
-                            <Mail className="h-4 w-4 text-gray-400" />
+                            <span className="text-sm">📧</span>
                             <span>{user.email}</span>
                           </div>
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center space-x-2">
-                            <Phone className="h-4 w-4 text-gray-400" />
+                            <span className="text-sm">📞</span>
                             <span>{user.phone}</span>
                           </div>
                         </TableCell>
@@ -307,19 +354,20 @@ export default function UsersPage() {
                         <TableCell>
                           <div className="flex space-x-2">
                             <Button variant="ghost" size="sm">
-                              <Edit className="h-4 w-4" />
+                              ✏️
                             </Button>
                             <Button variant="ghost" size="sm">
-                              <Trash2 className="h-4 w-4" />
+                              🗑️
                             </Button>
                           </div>
                         </TableCell>
                       </TableRow>
                     ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </div>
         </main>
       </div>
     </div>

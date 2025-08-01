@@ -1,38 +1,32 @@
 "use client"
-
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts"
 
 const data = [
-  { name: "Dell XPS 13", value: 45 },
-  { name: "iPhone 14 Pro", value: 38 },
-  { name: "Galaxy S23", value: 32 },
-  { name: "iPad Air M1", value: 28 },
+  { name: "iPhone 14", ventes: 145 },
+  { name: "Samsung S23", ventes: 132 },
+  { name: "MacBook Pro", ventes: 98 },
+  { name: "iPad Air", ventes: 87 },
+  { name: "AirPods Pro", ventes: 76 },
 ]
 
 export function TopProductsChart() {
-  const maxValue = Math.max(...data.map((d) => d.value))
-
   return (
-    <Card className="bg-white">
+    <Card>
       <CardHeader>
-        <CardTitle className="text-lg font-semibold">Top produits</CardTitle>
+        <CardTitle className="flex items-center gap-2">🏆 Top produits</CardTitle>
+        <CardDescription>Produits les plus vendus ce mois</CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="h-80 flex flex-col justify-center space-y-6">
-          {data.map((item, index) => (
-            <div key={index} className="flex items-center space-x-4">
-              <div className="w-24 text-sm text-gray-600 text-right">{item.name}</div>
-              <div className="flex-1 bg-gray-200 rounded-full h-8 relative">
-                <div
-                  className="bg-blue-500 h-8 rounded-full flex items-center justify-end pr-3"
-                  style={{ width: `${(item.value / maxValue) * 100}%` }}
-                >
-                  <span className="text-white text-sm font-medium">{item.value}</span>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
+        <ResponsiveContainer width="100%" height={300}>
+          <BarChart data={data}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="name" />
+            <YAxis />
+            <Tooltip />
+            <Bar dataKey="ventes" fill="#10b981" />
+          </BarChart>
+        </ResponsiveContainer>
       </CardContent>
     </Card>
   )

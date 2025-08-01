@@ -1,62 +1,53 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+"use client"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { AlertTriangle, Smartphone, Laptop } from "lucide-react"
-
-const alerts = [
-  {
-    id: 1,
-    product: "iPhone 15 Pro 256GB",
-    category: "Smartphones",
-    stock: 2,
-    icon: Smartphone,
-    status: "low",
-  },
-  {
-    id: 2,
-    product: "Laptop Lenovo ThinkPad",
-    category: "Ordinateurs",
-    stock: 0,
-    icon: Laptop,
-    status: "out",
-  },
-]
+import { Button } from "@/components/ui/button"
 
 export function StockAlerts() {
+  const alerts = [
+    { id: 1, product: "Samsung Galaxy S23", stock: 5, threshold: 10, status: "low" },
+    { id: 2, product: "MacBook Air M2", stock: 0, threshold: 5, status: "out" },
+    { id: 3, product: "AirPods Pro", stock: 8, threshold: 15, status: "low" },
+    { id: 4, product: "iPad Mini", stock: 2, threshold: 10, status: "critical" },
+  ]
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case "out":
+        return <Badge variant="destructive">❌ Rupture</Badge>
+      case "critical":
+        return <Badge className="bg-red-100 text-red-800">🚨 Critique</Badge>
+      case "low":
+        return <Badge className="bg-orange-100 text-orange-800">⚠️ Faible</Badge>
+      default:
+        return <Badge variant="secondary">ℹ️ Normal</Badge>
+    }
+  }
+
   return (
-    <Card className="bg-white">
+    <Card>
       <CardHeader>
-        <CardTitle className="text-lg font-semibold flex items-center">
-          <AlertTriangle className="h-5 w-5 text-orange-500 mr-2" />
-          Alertes stock
-        </CardTitle>
+        <CardTitle className="flex items-center gap-2">🚨 Alertes de stock</CardTitle>
+        <CardDescription>Produits nécessitant une attention</CardDescription>
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
-          {alerts.map((alert) => {
-            const Icon = alert.icon
-            return (
-              <div
-                key={alert.id}
-                className="flex items-center justify-between p-4 border-l-4 border-orange-500 bg-orange-50 rounded-r-lg"
-              >
-                <div className="flex items-center space-x-3">
-                  <div className="p-2 bg-orange-100 rounded-lg">
-                    <Icon className="h-5 w-5 text-orange-600" />
-                  </div>
-                  <div>
-                    <div className="font-medium text-gray-900">{alert.product}</div>
-                    <div className="text-sm text-gray-600">{alert.category}</div>
-                  </div>
-                </div>
-                <Badge
-                  variant={alert.status === "out" ? "destructive" : "secondary"}
-                  className={alert.status === "out" ? "bg-red-100 text-red-800" : "bg-orange-100 text-orange-800"}
-                >
-                  {alert.stock === 0 ? "0 unités" : `${alert.stock} unités`}
-                </Badge>
+          {alerts.map((alert) => (
+            <div key={alert.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+              <div className="flex-1">
+                <p className="font-medium text-sm">{alert.product}</p>
+                <p className="text-xs text-gray-500">
+                  Stock: {alert.stock} / Seuil: {alert.threshold}
+                </p>
               </div>
-            )
-          })}
+              <div className="flex items-center space-x-2">
+                {getStatusBadge(alert.status)}
+                <Button size="sm" variant="outline">
+                  📦 Réapprovisionner
+                </Button>
+              </div>
+            </div>
+          ))}
         </div>
       </CardContent>
     </Card>
