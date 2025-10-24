@@ -1,13 +1,13 @@
-"use client"
-import { Bell, Search, User } from "lucide-react"
-import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Sidebar } from "@/components/sidebar"
-import { StatsCards } from "@/components/stats-cards"
-import { SalesChart } from "@/components/sales-chart"
-import { TopProductsChart } from "@/components/top-products-chart"
-import { StockAlerts } from "@/components/stock-alerts"
+"use client";
+import { Bell, Search, User } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Sidebar } from "@/components/sidebar";
+import { StatsCards } from "@/components/stats-cards";
+import { SalesChart } from "@/components/sales-chart";
+import { TopProductsChart } from "@/components/top-products-chart";
+import { StockAlerts } from "@/components/stock-alerts";
 
 export default function Dashboard() {
   return (
@@ -21,7 +21,10 @@ export default function Dashboard() {
             <div className="flex-1 max-w-md">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                <Input placeholder="Rechercher un produit, commande..." className="pl-10 bg-gray-50 border-gray-200" />
+                <Input
+                  placeholder="Rechercher un produit, commande..."
+                  className="pl-10 bg-gray-50 border-gray-200"
+                />
               </div>
             </div>
 
@@ -42,8 +45,12 @@ export default function Dashboard() {
         {/* Main Content */}
         <main className="flex-1 p-6">
           <div className="mb-8">
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">Tableau de bord</h1>
-            <p className="text-gray-600">Aperçu de votre activité commerciale</p>
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">
+              Tableau de bord
+            </h1>
+            <p className="text-gray-600">
+              Aperçu de votre activité commerciale
+            </p>
           </div>
 
           {/* Stats Cards */}
@@ -60,5 +67,5 @@ export default function Dashboard() {
         </main>
       </div>
     </div>
-  )
+  );
 }
