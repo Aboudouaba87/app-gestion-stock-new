@@ -1,6 +1,7 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { data } from "../app/types/topProduit";
 
 import {
   BarChart,
@@ -13,15 +14,15 @@ import {
   Legend,
 } from "recharts";
 
-const data = [
-  { name: "Dell XPS 13", value: 45 },
-  { name: "iPhone 14 Pro", value: 38 },
-  { name: "Galaxy S23", value: 32 },
-  { name: "iPad Air M1", value: 28 },
-  { name: "iPad Pro", value: 25 },
-];
+// const data = [
+//   { name: "Dell XPS 13", value: 45 },
+//   { name: "iPhone 14 Pro", value: 38 },
+//   { name: "Galaxy S23", value: 32 },
+//   { name: "iPad Air M1", value: 28 },
+//   { name: "iPad Pro", value: 25 },
+// ];
 
-export function TopProductsChart() {
+export function TopProductsChart({ data: data }: { data: data[] }) {
   return (
     <Card className="bg-white">
       <CardHeader>

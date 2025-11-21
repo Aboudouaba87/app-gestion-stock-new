@@ -11,16 +11,13 @@ import {
   Legend,
 } from "recharts";
 
-const data = [
-  { month: "Jan", sales: 4000, orders: 2400 },
-  { month: "Fév", sales: 3000, orders: 1398 },
-  { month: "Mar", sales: 2000, orders: 9800 },
-  { month: "Avr", sales: 2780, orders: 3908 },
-  { month: "Mai", sales: 1890, orders: 4800 },
-  { month: "Jun", sales: 2390, orders: 3800 },
-];
-
-export function SalesChart() {
+export function SalesChart({
+  data,
+}: {
+  data: any[];
+  loading: boolean;
+  error: any;
+}) {
   return (
     <Card className="bg-white">
       <CardHeader>

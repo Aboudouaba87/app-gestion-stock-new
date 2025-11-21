@@ -33,56 +33,64 @@ async function getSaleById(id: number) {
   return result.rows[0];
 }
 
-// GET : récupérer toutes les ventes (ajoute Cache-Control: no-store)
-export async function GET() {
-  try {
-    const result = await pool.query(`
-      SELECT
-        s.id,
-        s.order_number AS "orderNumber",
-        s.date,
-        c.name AS "customer",
-        c.email AS "customerEmail",
-        s.amount::float AS "amount",
-        s.status,
-        s.payment_status AS "paymentStatus",
-        s.items,
-        (
-          SELECT json_agg(json_build_object(
-            'name', sp.name,
-            'quantity', sp.quantity,
-            'price', sp.price::float
-          ))
-          FROM sale_products sp
-          WHERE sp.sale_id = s.id
-        ) AS products
-      FROM sales s
-      JOIN clients c ON s.client_id = c.id
-      ORDER BY s.date DESC
-    `);
-
-    return NextResponse.json(result.rows, {
-      status: 200,
-      headers: { "Cache-Control": "no-store" },
-    });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
-  }
-}
-
-
-// POST : créer une vente + produits
+// POST : créer une vente avec client auto et numéro unique
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { orderNumber, date, customerEmail, amount, status, paymentStatus, items, products } = body;
+    console.log("Reçu dans POST /api/sales :", body);
 
-    // Vérifier le client
-    const clientRes = await pool.query(`SELECT id FROM clients WHERE email = $1`, [customerEmail]);
-    if (clientRes.rowCount === 0) {
-      return NextResponse.json({ error: "Client introuvable" }, { status: 404 });
+    const { date, customerEmail, amount, status, paymentStatus, items, products } = body;
+
+    if (
+      typeof customerEmail !== "string" ||
+      typeof amount !== "number" ||
+      !Array.isArray(products) ||
+      products.length === 0
+    ) {
+      return NextResponse.json({ error: "Champs requis invalides ou manquants" }, { status: 400 });
     }
-    const clientId = clientRes.rows[0].id;
+
+    // Vérifier ou créer le client
+    let clientRes = await pool.query(`SELECT id FROM clients WHERE email = $1`, [customerEmail]);
+    let clientId: number;
+
+    if (clientRes.rowCount === 0) {
+      const newClient = await pool.query(
+        `INSERT INTO clients (name, email, type, created_at, updated_at)
+         VALUES ($1, $1, 'Particulier', NOW(), NOW()) RETURNING id`,
+        [customerEmail]
+      );
+      clientId = newClient.rows[0].id;
+    } else {
+      clientId = clientRes.rows[0].id;
+    }
+
+    // Générer un numéro de commande unique
+    const nextIdRes = await pool.query(`SELECT nextval('sales_id_seq')`);
+    const nextId = nextIdRes.rows[0].nextval;
+    const orderNumber = `CMD-${new Date().getFullYear()}-${String(nextId).padStart(3, "0")}`;
+
+    // Vérifier et mettre à jour le stock
+    for (const p of products) {
+      const stockRes = await pool.query(
+        `SELECT stock FROM products WHERE name = $1`,
+        [p.name]
+      );
+
+      if (stockRes.rowCount === 0) {
+        return NextResponse.json({ error: `Produit introuvable : ${p.name}` }, { status: 404 });
+      }
+
+      const currentStock = stockRes.rows[0].stock;
+      if (currentStock < p.quantity) {
+        return NextResponse.json({ error: `Stock insuffisant pour ${p.name}` }, { status: 400 });
+      }
+
+      await pool.query(
+        `UPDATE products SET stock = stock - $1 WHERE name = $2`,
+        [p.quantity, p.name]
+      );
+    }
 
     // Insérer la vente
     const saleRes = await pool.query(
@@ -92,7 +100,7 @@ export async function POST(request: NextRequest) {
     );
     const saleId = saleRes.rows[0].id;
 
-    // Insérer les produits
+    // Insérer les produits vendus
     for (const p of products) {
       await pool.query(
         `INSERT INTO sale_products (sale_id, name, quantity, price) VALUES ($1,$2,$3,$4)`,
@@ -100,13 +108,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Retourner la vente complète formatée
     const newSale = await getSaleById(saleId);
     return NextResponse.json(newSale, { status: 201 });
   } catch (err: any) {
+    console.error("Erreur POST /api/sales :", err);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
+
 
 // PUT : mettre à jour une vente
 export async function PUT(request: NextRequest) {
@@ -127,7 +136,6 @@ export async function PUT(request: NextRequest) {
       [status, paymentStatus, id]
     );
 
-    // Retourner la vente complète formatée
     const updatedSale = await getSaleById(id);
     return NextResponse.json(updatedSale, { status: 200 });
   } catch (err: any) {
