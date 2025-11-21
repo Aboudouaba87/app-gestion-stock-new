@@ -8,8 +8,7 @@ const inter = Inter({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "StockPro - Gestion de Stock Universelle",
   description:
-    "Application complète de gestion de stock pour tous types de produits",
-  generator: "v0.dev",
+    "Application de gestion de stock pour tous les types d'entreprises.",
 };
 
 export default function RootLayout({
