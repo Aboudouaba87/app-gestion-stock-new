@@ -368,7 +368,7 @@ export async function GET(req: NextRequest) {
       ),
       client.query(
         `
-        SELECT sm.id, sm.product_id, p.sku, p.name, sm.type, sm.qty,
+        SELECT sm.id, sm.product_id, p.sku, p.name, sm.type, sm.quantity,
                sm.from_warehouse, sm.to_warehouse, sm.reference,
                u.email AS user_email, sm.created_at
         FROM stock_movements sm
