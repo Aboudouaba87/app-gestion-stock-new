@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 // app/api/warehouses/route.ts
 import { NextResponse, NextRequest } from "next/server";
 import { pool } from "@/lib/db";
