@@ -22,6 +22,7 @@ type AlertItem = {
   id: number;
   product: string;
   category: string;
+  name: string;
   stock: number;
   icon?: string | null; // nom d'icône envoyé par l'API
   status: "low" | "out";
@@ -35,7 +36,7 @@ export function StockAlerts({
   titre?: string;
 }) {
   return (
-    <Card className="bg-white">
+    <Card className="bg-white dark:bg-gray-900 dark:text-gray-300">
       <CardHeader>
         <CardTitle className="text-lg font-semibold flex items-center">
           <AlertTriangle className="h-5 w-5 text-orange-500 mr-2" />
@@ -45,7 +46,7 @@ export function StockAlerts({
 
       <CardContent>
         <div className="space-y-4">
-          {alerts?.map((alert) => {
+          {alerts?.map((alert, index) => {
             const IconComponent = alert.icon ? ICONS[alert.icon] : undefined;
             const RenderIcon = IconComponent ? (
               <IconComponent className="h-5 w-5 text-orange-600" />
@@ -55,7 +56,7 @@ export function StockAlerts({
 
             return (
               <div
-                key={alert.id}
+                key={index}
                 className="flex items-center justify-between p-4 border-l-4 border-orange-500 bg-orange-50 rounded-r-lg"
               >
                 <div className="flex items-center space-x-3">
@@ -64,11 +65,16 @@ export function StockAlerts({
                   </div>
 
                   <div>
-                    <div className="font-medium text-gray-900">
+                    <div className="font-medium text-gray-900 dark:text-white">
                       {alert.product}
                     </div>
-                    <div className="text-sm text-gray-600">
-                      {alert.category}
+                    <div>
+                      <div className="font-medium text-gray-900">
+                        {alert.name}
+                      </div>
+                      <div className="text-sm text-gray-500">
+                        {alert.category}
+                      </div>
                     </div>
                   </div>
                 </div>

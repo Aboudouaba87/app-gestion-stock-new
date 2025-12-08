@@ -40,6 +40,7 @@ import {
 } from "@/app/dashboard/components/ui/select";
 import { toast } from "sonner";
 import { Textarea } from "@/app/dashboard/components/ui/textarea";
+import { RoleGuard } from "../components/auth/role-guard";
 
 type Product = {
   id: number;
@@ -49,6 +50,7 @@ type Product = {
   category: string;
   stock: number;
   price: number;
+  cost_price: number | null;
   supplier: string | null;
   status: string;
   description: string | null;
@@ -57,7 +59,7 @@ type Product = {
 };
 
 type Warehouse = {
-  id: number;
+  id: string;
   name: string;
 };
 
@@ -97,6 +99,12 @@ export default function ProductsPage() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [categories, setCategories] = React.useState<
+    Array<{ id: number; name: string }>
+  >([]);
+  const [suppliers, setSuppliers] = React.useState<
+    Array<{ id: number; name: string }>
+  >([]);
 
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(5);
@@ -112,25 +120,64 @@ export default function ProductsPage() {
     category: "",
     stock: "0",
     price: "0.00",
+    cost_price: "0.00", // 🔥 AJOUT
     supplier: "aucun",
     description: "",
     warehouse_id: "none",
   });
 
-  const categories = [
-    "Smartphones",
-    "Ordinateurs",
-    "Tablettes",
-    "Accessoires",
-    "Audio",
-  ];
-  const suppliers = [
-    "Apple Inc.",
-    "Samsung",
-    "Dell Technologies",
-    "HP",
-    "Lenovo",
-  ];
+  // const categories = [
+  //   "Smartphones",
+  //   "Ordinateurs",
+  //   "Tablettes",
+  //   "Accessoires",
+  //   "Audio",
+  // ];
+  // const suppliers = [
+  //   "Apple Inc.",
+  //   "Samsung",
+  //   "Dell Technologies",
+  //   "HP",
+  //   "Lenovo",
+  // ];
+  // Catégorie
+
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const res = await fetch("/api/categories", {
+          cache: "no-store",
+        });
+        if (!res.ok) throw new Error("Erreur API rôles");
+        const data = await res.json();
+        setCategories(data);
+      } catch (err) {
+        console.error("Erreur fetch categories :", err);
+      } finally {
+        // setLoadingCategories(false);
+      }
+    };
+    fetchCategories();
+  }, []);
+
+  useEffect(() => {
+    const fetchSuppliers = async () => {
+      try {
+        const res = await fetch("/api/suppliers", {
+          cache: "no-store",
+        });
+        if (!res.ok) throw new Error("Erreur API rôles");
+        const data = await res.json();
+        setSuppliers(data);
+      } catch (err) {
+        console.error("Erreur fetch categories :", err);
+      } finally {
+        // setLoadingCategories(false);
+      }
+    };
+    fetchSuppliers();
+  }, []);
+  console.log("Les fournisseurs sont : ", suppliers);
 
   // Load products and warehouses on mount
   useEffect(() => {
@@ -248,6 +295,7 @@ export default function ProductsPage() {
       category: "",
       stock: "0",
       price: "0.00",
+      cost_price: "", // 🔥 AJOUT
       supplier: "aucun",
       description: "",
       warehouse_id: "none",
@@ -278,13 +326,35 @@ export default function ProductsPage() {
         return;
       }
 
+      // Validation du prix de vente et du coût
+      const price = Number.parseFloat(formData.price || "0");
+      const costPrice = Number.parseFloat(formData.cost_price || "0"); // AJOUTÉ
+
+      if (price <= 0) {
+        toast.warning("Le prix de vente doit être supérieur à 0");
+        return;
+      }
+
+      if (costPrice < 0) {
+        toast.warning("Le coût d'achat ne peut pas être négatif");
+        return;
+      }
+
+      if (costPrice > price) {
+        toast.warning(
+          "Le coût d'achat ne peut pas être supérieur au prix de vente"
+        );
+        return;
+      }
+
       const payload = {
         user_id: Number(formData.user_id),
         name: formData.name,
         reference: formData.reference,
         category: formData.category || null,
         stock: stockValue,
-        price: Number.parseFloat(formData.price || "0"),
+        price: price,
+        cost_price: costPrice, // 🔥 AJOUT DU COST_PRICE
         supplier: formData.supplier === "aucun" ? null : formData.supplier,
         description: formData.description || null,
         status:
@@ -293,12 +363,14 @@ export default function ProductsPage() {
             : stockValue <= 10
             ? "low_stock"
             : "active",
-        // CORRECTION : Envoyer comme string, pas comme number
         warehouse_id:
-          formData.warehouse_id === "none" ? null : formData.warehouse_id, // Garder comme string
+          formData.warehouse_id === "none" ? null : formData.warehouse_id,
       };
 
       console.log("📦 Payload ajout:", payload);
+      console.log(
+        `💰 Prix: ${price}€, Coût: ${costPrice}€, Marge: ${price - costPrice}€`
+      );
 
       const res = await fetch("/api/products", {
         method: "POST",
@@ -315,7 +387,7 @@ export default function ProductsPage() {
       setProducts((prev) => [...prev, saved]);
       setIsAddModalOpen(false);
       resetForm();
-      toast.success("Produit ajouté avec succès");
+      toast.success(`Produit ajouté avec succès! Marge: ${price - costPrice}€`);
     } catch (err) {
       console.error("handleAdd error:", err);
       toast.error("Impossible d'ajouter le produit");
@@ -400,6 +472,7 @@ export default function ProductsPage() {
       category: product.category || "",
       stock: String(product.stock ?? 0),
       price: String(product.price ?? 0),
+      cost_price: String(product.cost_price ?? 0), // 🔥 AJOUT
       supplier: product.supplier || "aucun",
       description: product.description || "",
       warehouse_id: "none", // L'utilisateur devra re-sélectionner l'entrepôt
@@ -501,650 +574,838 @@ export default function ProductsPage() {
   }
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
-      <Sidebar />
+    <RoleGuard allowedRoles={["admin"]}>
+      <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900 dark:!text-white">
+        <Sidebar />
 
-      <div className="flex-1 flex flex-col">
-        <header className="bg-white border-b border-gray-200 px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">Produits</h1>
-              <p className="text-gray-600">Gérez votre catalogue de produits</p>
-            </div>
+        <div className="flex-1 flex flex-col">
+          <header className="bg-white border-b border-gray-200 px-6 py-4 dark:bg-gray-900 dark:text-white">
+            <div className="flex items-center justify-between">
+              <div className=" ml-10 lg:ml-0">
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                  Produits
+                </h1>
+                <p className="text-gray-600 dark:text-gray-300">
+                  Gérez votre catalogue de produits
+                </p>
+              </div>
 
-            <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
-              <DialogTrigger asChild>
-                <Button className="bg-blue-600 hover:bg-blue-700">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Nouveau produit
-                </Button>
-              </DialogTrigger>
+              <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
+                <DialogTrigger asChild>
+                  <Button className="bg-blue-600 hover:bg-blue-700 dark:text-white">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Nouveau produit
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-md w-full max-h-[80vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle>Ajouter un produit</DialogTitle>
+                    <DialogDescription>
+                      Créez un nouveau produit dans votre catalogue.
+                    </DialogDescription>
+                  </DialogHeader>
 
-              <DialogContent className="max-w-md w-full max-h-[80vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle>Ajouter un produit</DialogTitle>
-                  <DialogDescription>
-                    Créez un nouveau produit dans votre catalogue.
-                  </DialogDescription>
-                </DialogHeader>
-
-                <div className="grid gap-4 py-4">
-                  <div className="grid gap-2">
-                    <Label>Nom du produit</Label>
-                    <Input
-                      value={formData.name}
-                      onChange={(e) =>
-                        setFormData({ ...formData, name: e.target.value })
-                      }
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label>Référence</Label>
-                    <Input
-                      value={formData.reference}
-                      onChange={(e) =>
-                        setFormData({ ...formData, reference: e.target.value })
-                      }
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label>Catégorie</Label>
-                    <Select
-                      value={formData.category}
-                      onValueChange={(v) =>
-                        setFormData({ ...formData, category: v })
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Sélectionner une catégorie" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {categories.map((c) => (
-                          <SelectItem key={c} value={c}>
-                            {c}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <Label>Stock initial</Label>
+                  <div className="grid gap-4 py-4">
+                    <div className="grid gap-2">
+                      <Label>Nom du produit</Label>
                       <Input
-                        type="number"
-                        value={formData.stock}
+                        value={formData.name}
                         onChange={(e) =>
-                          setFormData({ ...formData, stock: e.target.value })
+                          setFormData({ ...formData, name: e.target.value })
                         }
                       />
                     </div>
-                    <div>
-                      <Label>Prix (€)</Label>
+                    <div className="grid gap-2">
+                      <Label>Référence</Label>
                       <Input
-                        type="number"
-                        step="0.01"
-                        value={formData.price}
+                        value={formData.reference}
                         onChange={(e) =>
-                          setFormData({ ...formData, price: e.target.value })
+                          setFormData({
+                            ...formData,
+                            reference: e.target.value,
+                          })
                         }
                       />
                     </div>
-                  </div>
-                  // Dans vos modals, ajoutez un debug temporaire
-                  <div>
-                    <Label>Magasin (optionnel)</Label>
-                    <Select
-                      value={formData.warehouse_id}
-                      onValueChange={(v) => {
-                        console.log(
-                          "🔄 Warehouse sélectionné:",
-                          v,
-                          "Type:",
-                          typeof v
-                        );
-                        setFormData({ ...formData, warehouse_id: v });
-                      }}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Sélectionner un magasin" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">Aucun</SelectItem>
-                        {warehouses.map((w) => (
-                          <SelectItem key={w.id} value={w.id}>
-                            {" "}
-                            {/* w.id est maintenant "main", "north", etc. */}
-                            {w.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {/* Debug temporaire */}
-                    <p className="text-xs text-gray-500 mt-1">
-                      Valeur sélectionnée: {formData.warehouse_id}
-                    </p>
-                  </div>
-                  <div>
-                    <Label>Fournisseur</Label>
-                    <Select
-                      value={formData.supplier}
-                      onValueChange={(v) =>
-                        setFormData({ ...formData, supplier: v })
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Sélectionner un fournisseur" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="aucun">Aucun</SelectItem>{" "}
-                        {/* CORRECTION : "aucun" au lieu de "" */}
-                        {suppliers.map((s) => (
-                          <SelectItem key={s} value={s}>
-                            {s}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>Description</Label>
-                    <Textarea
-                      value={formData.description}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          description: e.target.value,
-                        })
-                      }
-                    />
-                  </div>
-                </div>
-
-                <DialogFooter className="flex gap-3 pt-6 border-t">
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setIsAddModalOpen(false);
-                      resetForm();
-                    }}
-                    className="flex-1"
-                  >
-                    Annuler
-                  </Button>
-                  <Button
-                    onClick={handleAdd}
-                    className="bg-green-600 hover:bg-green-700 text-white flex-1 font-semibold"
-                    disabled={
-                      !formData.name ||
-                      !formData.reference ||
-                      !formData.category
-                    }
-                  >
-                    ✓ Enregistrer le produit
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-          </div>
-        </header>
-
-        <main className="flex-1 p-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-600">Total produits</p>
-                    <p className="text-2xl font-bold">{products.length}</p>
-                  </div>
-                  <Package className="h-8 w-8 text-blue-600" />
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-600">En stock</p>
-                    <p className="text-2xl font-bold">
-                      {products.filter((p) => p.stock > 10).length}
-                    </p>
-                  </div>
-                  <div className="h-8 w-8 bg-green-100 rounded-full flex items-center justify-center">
-                    <div className="h-4 w-4 bg-green-600 rounded-full"></div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-600">Stock faible</p>
-                    <p className="text-2xl font-bold">
-                      {
-                        products.filter((p) => p.stock > 0 && p.stock <= 10)
-                          .length
-                      }
-                    </p>
-                  </div>
-                  <div className="h-8 w-8 bg-orange-100 rounded-full flex items-center justify-center">
-                    <div className="h-4 w-4 bg-orange-600 rounded-full"></div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-600">Rupture</p>
-                    <p className="text-2xl font-bold">
-                      {products.filter((p) => p.stock === 0).length}
-                    </p>
-                  </div>
-                  <div className="h-8 w-8 bg-red-100 rounded-full flex items-center justify-center">
-                    <div className="h-4 w-4 bg-red-600 rounded-full"></div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          <Card className="mb-6">
-            <CardContent className="p-6">
-              <div className="flex flex-col gap-4">
-                <div className="flex flex-col md:flex-row gap-4">
-                  <div className="flex-1">
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                      <Input
-                        placeholder="Rechercher un produit..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="pl-10"
-                      />
-                    </div>
-                  </div>
-                  <Button
-                    variant="outline"
-                    onClick={() => setShowFilters(!showFilters)}
-                  >
-                    <Filter className="h-4 w-4 mr-2" />
-                    {!showFilters ? "Filtres" : "Initialiser"}
-                    {showFilters && <X className="h-4 w-4 ml-2" />}
-                  </Button>
-                </div>
-
-                {showFilters && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t">
-                    <div>
+                    <div className="grid gap-2">
                       <Label>Catégorie</Label>
                       <Select
-                        value={categoryFilter}
-                        onValueChange={setCategoryFilter}
+                        value={formData.category}
+                        onValueChange={(v) =>
+                          setFormData({ ...formData, category: v })
+                        }
                       >
                         <SelectTrigger>
-                          <SelectValue />
+                          <SelectValue placeholder="Sélectionner une catégorie" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="all">
-                            Toutes les catégories
-                          </SelectItem>
                           {categories.map((c) => (
-                            <SelectItem key={c} value={c}>
-                              {c}
+                            <SelectItem key={c.id} value={c.name}>
+                              {c.name}
                             </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
                     </div>
+
+                    {/* 🔥 NOUVEAU : SECTION PRIX */}
+                    <div className="grid gap-4 border rounded-lg p-4 bg-gray-50">
+                      <div className="text-sm font-semibold text-gray-700">
+                        💵 Informations prix
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-2">
+                          <Label className="flex items-center gap-1">
+                            <span>Prix de vente (€)</span>
+                            <span className="text-xs text-gray-500">HT</span>
+                          </Label>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={formData.price}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              setFormData({ ...formData, price: value });
+
+                              // Calcul automatique de la marge
+                              const sellingPrice = parseFloat(value || "0");
+                              const costPrice = parseFloat(
+                                formData.cost_price || "0"
+                              );
+                              if (sellingPrice > 0 && costPrice >= 0) {
+                                const margin = sellingPrice - costPrice;
+                                const marginPercent = (
+                                  (margin / sellingPrice) *
+                                  100
+                                ).toFixed(1);
+                                // Vous pouvez afficher ces infos
+                                console.log(
+                                  `Marge calculée: ${margin}€ (${marginPercent}%)`
+                                );
+                              }
+                            }}
+                            placeholder="0.00"
+                            className="border-green-200 bg-green-50"
+                          />
+                          <p className="text-xs text-gray-500">
+                            Prix HT affiché aux clients
+                          </p>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label className="flex items-center gap-1">
+                            <span>Prix d'achat (€)</span>
+                            <span className="text-xs text-gray-500">Coût</span>
+                          </Label>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={formData.cost_price || ""}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              setFormData({ ...formData, cost_price: value });
+
+                              // Calcul automatique de la marge
+                              const costPrice = parseFloat(value || "0");
+                              const sellingPrice = parseFloat(
+                                formData.price || "0"
+                              );
+                              if (sellingPrice > 0 && costPrice >= 0) {
+                                const margin = sellingPrice - costPrice;
+                                const marginPercent = (
+                                  (margin / sellingPrice) *
+                                  100
+                                ).toFixed(1);
+                                // Vous pouvez afficher ces infos
+                                console.log(
+                                  `Marge calculée: ${margin}€ (${marginPercent}%)`
+                                );
+                              }
+                            }}
+                            placeholder="0.00"
+                            className="border-blue-200 bg-blue-50"
+                          />
+                          <p className="text-xs text-gray-500">
+                            Coût d'achat chez le fournisseur
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Affichage de la marge calculée */}
+                      {formData.price && formData.cost_price && (
+                        <div className="grid grid-cols-3 gap-2 text-sm border-t pt-3">
+                          <div className="text-center">
+                            <div className="font-semibold text-gray-700">
+                              Marge
+                            </div>
+                            <div className="text-green-600 font-bold">
+                              {(() => {
+                                const sellingPrice = parseFloat(
+                                  formData.price || "0"
+                                );
+                                const costPrice = parseFloat(
+                                  formData.cost_price || "0"
+                                );
+                                const margin = sellingPrice - costPrice;
+                                return `${margin.toFixed(2)}€`;
+                              })()}
+                            </div>
+                          </div>
+                          <div className="text-center">
+                            <div className="font-semibold text-gray-700">
+                              Marge %
+                            </div>
+                            <div className="text-green-600 font-bold">
+                              {(() => {
+                                const sellingPrice = parseFloat(
+                                  formData.price || "0"
+                                );
+                                const costPrice = parseFloat(
+                                  formData.cost_price || "0"
+                                );
+                                if (sellingPrice > 0) {
+                                  const marginPercent =
+                                    ((sellingPrice - costPrice) /
+                                      sellingPrice) *
+                                    100;
+                                  return `${marginPercent.toFixed(1)}%`;
+                                }
+                                return "0%";
+                              })()}
+                            </div>
+                          </div>
+                          <div className="text-center">
+                            <div className="font-semibold text-gray-700">
+                              TTC
+                            </div>
+                            <div className="text-gray-600">
+                              {(() => {
+                                const sellingPrice = parseFloat(
+                                  formData.price || "0"
+                                );
+                                const ttc = sellingPrice * 1.18; // TVA 18%
+                                return `${ttc.toFixed(2)}€`;
+                              })()}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <Label>Stock initial</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          value={formData.stock}
+                          onChange={(e) =>
+                            setFormData({ ...formData, stock: e.target.value })
+                          }
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label>Statut</Label>
+                        <Select
+                          value={formData.status}
+                          onValueChange={(v) =>
+                            setFormData({ ...formData, status: v })
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Sélectionner un statut" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="active">Actif</SelectItem>
+                            <SelectItem value="inactive">Inactif</SelectItem>
+                            <SelectItem value="low_stock">
+                              Stock faible
+                            </SelectItem>
+                            <SelectItem value="out_of_stock">
+                              Rupture
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
                     <div>
-                      <Label>Statut</Label>
+                      <Label>Magasin (optionnel)</Label>
                       <Select
-                        value={statusFilter}
-                        onValueChange={setStatusFilter}
+                        value={formData.warehouse_id}
+                        onValueChange={(v) => {
+                          console.log(
+                            "🔄 Warehouse sélectionné:",
+                            v,
+                            "Type:",
+                            typeof v
+                          );
+                          setFormData({ ...formData, warehouse_id: v });
+                        }}
                       >
                         <SelectTrigger>
-                          <SelectValue />
+                          <SelectValue placeholder="Sélectionner un magasin" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="all">Tous les statuts</SelectItem>
-                          <SelectItem value="in_stock">En stock</SelectItem>
-                          <SelectItem value="low_stock">
-                            Stock faible
-                          </SelectItem>
-                          <SelectItem value="out_of_stock">Rupture</SelectItem>
+                          <SelectItem value="none">Aucun</SelectItem>
+                          {warehouses.map((w) => (
+                            <SelectItem key={w.id} value={w.id}>
+                              {w.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Valeur sélectionnée: {formData.warehouse_id}
+                      </p>
+                    </div>
+
+                    <div>
+                      <Label>Fournisseur</Label>
+                      <Select
+                        value={formData.supplier}
+                        onValueChange={(v) =>
+                          setFormData({ ...formData, supplier: v })
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Sélectionner un fournisseur" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="aucun">Aucun</SelectItem>
+                          {suppliers.map((s) => (
+                            <SelectItem key={s.id} value={s.name}>
+                              {s.name}
+                            </SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                     </div>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>
-                Liste des produits ({filteredProducts.length})
-                {totalPages > 1 && ` - Page ${currentPage}/${totalPages}`}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Produit</TableHead>
-                    <TableHead>Référence</TableHead>
-                    <TableHead>Catégorie</TableHead>
-                    <TableHead>Stock</TableHead>
-                    <TableHead>Prix</TableHead>
-                    <TableHead>Fournisseur</TableHead>
-                    <TableHead>Statut</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {paginatedProducts.map((product) => (
-                    <TableRow key={product.id}>
-                      <TableCell className="font-medium">
-                        {product.name}
-                      </TableCell>
-                      <TableCell>{product.reference}</TableCell>
-                      <TableCell>{product.category}</TableCell>
-                      <TableCell>{product.stock}</TableCell>
-                      <TableCell>€{product.price}</TableCell>
-                      <TableCell>{product.supplier}</TableCell>
-                      <TableCell>
-                        {getStatusBadge(product.status, product.stock)}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex space-x-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleEdit(product)}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDelete(product)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-            {/* AJOUT: Composant de pagination */}
-            <div className="flex items-center justify-between px-6 py-4 border-t">
-              <div className="text-sm text-gray-600">
-                Affichage de {startIndex + 1} à{" "}
-                {Math.min(startIndex + itemsPerPage, filteredProducts.length)}{" "}
-                sur {filteredProducts.length} produits
-              </div>
-
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() =>
-                    setCurrentPage((prev) => Math.max(prev - 1, 1))
-                  }
-                  disabled={currentPage === 1}
-                >
-                  Précédent
-                </Button>
-
-                <div className="flex items-center gap-1">
-                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                    const pageNum = i + 1;
-                    return (
-                      <Button
-                        key={pageNum}
-                        variant={
-                          currentPage === pageNum ? "default" : "outline"
+                    <div>
+                      <Label>Description</Label>
+                      <Textarea
+                        value={formData.description}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            description: e.target.value,
+                          })
                         }
-                        size="sm"
-                        onClick={() => setCurrentPage(pageNum)}
-                      >
-                        {pageNum}
-                      </Button>
-                    );
-                  })}
-                  {totalPages > 5 && (
-                    <span className="px-2 text-sm text-gray-500">...</span>
+                      />
+                    </div>
+                  </div>
+
+                  <DialogFooter className="flex gap-3 pt-6 border-t">
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setIsAddModalOpen(false);
+                        resetForm();
+                      }}
+                      className="flex-1"
+                    >
+                      Annuler
+                    </Button>
+                    <Button
+                      onClick={handleAdd}
+                      className="bg-green-600 hover:bg-green-700 text-white flex-1 font-semibold"
+                      disabled={
+                        !formData.name ||
+                        !formData.reference ||
+                        !formData.category ||
+                        !formData.price ||
+                        parseFloat(formData.price || "0") <= 0
+                      }
+                    >
+                      ✓ Enregistrer le produit
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </div>
+          </header>
+
+          <main className="flex-1 p-6">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-gray-600 dark:text-gray-300">
+                        Total produits
+                      </p>
+                      <p className="text-2xl font-bold">{products.length}</p>
+                    </div>
+                    <Package className="h-8 w-8 text-blue-600" />
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-gray-600 dark:text-gray-300">
+                        En stock
+                      </p>
+                      <p className="text-2xl font-bold">
+                        {products.filter((p) => p.stock > 10).length}
+                      </p>
+                    </div>
+                    <div className="h-8 w-8 bg-green-100 rounded-full flex items-center justify-center">
+                      <div className="h-4 w-4 bg-green-600 rounded-full"></div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-gray-600 dark:text-gray-300">
+                        Stock faible
+                      </p>
+                      <p className="text-2xl font-bold">
+                        {
+                          products.filter((p) => p.stock > 0 && p.stock <= 10)
+                            .length
+                        }
+                      </p>
+                    </div>
+                    <div className="h-8 w-8 bg-orange-100 rounded-full flex items-center justify-center">
+                      <div className="h-4 w-4 bg-orange-600 rounded-full"></div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-gray-600 dark:text-gray-300">
+                        Rupture
+                      </p>
+                      <p className="text-2xl font-bold">
+                        {products.filter((p) => p.stock === 0).length}
+                      </p>
+                    </div>
+                    <div className="h-8 w-8 bg-red-100 rounded-full flex items-center justify-center">
+                      <div className="h-4 w-4 bg-red-600 rounded-full"></div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            <Card className="mb-6">
+              <CardContent className="p-6">
+                <div className="flex flex-col gap-4">
+                  <div className="flex flex-col md:flex-row gap-4">
+                    <div className="flex-1">
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4 dark:text-gray-200" />
+                        <Input
+                          placeholder="Rechercher un produit..."
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                          className="pl-10"
+                        />
+                      </div>
+                    </div>
+                    <Button
+                      variant="outline"
+                      onClick={() => setShowFilters(!showFilters)}
+                    >
+                      <Filter className="h-4 w-4 mr-2" />
+                      {!showFilters ? "Filtres" : "Initialiser"}
+                      {showFilters && <X className="h-4 w-4 ml-2" />}
+                    </Button>
+                  </div>
+
+                  {showFilters && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t">
+                      <div>
+                        <Label>Catégorie</Label>
+                        <Select
+                          value={categoryFilter}
+                          onValueChange={setCategoryFilter}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">
+                              Toutes les catégories
+                            </SelectItem>
+                            {categories.map((c) => (
+                              <SelectItem key={c.id} value={c.name}>
+                                {c.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label>Statut</Label>
+                        <Select
+                          value={statusFilter}
+                          onValueChange={setStatusFilter}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">
+                              Tous les statuts
+                            </SelectItem>
+                            <SelectItem value="in_stock">En stock</SelectItem>
+                            <SelectItem value="low_stock">
+                              Stock faible
+                            </SelectItem>
+                            <SelectItem value="out_of_stock">
+                              Rupture
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
                   )}
                 </div>
+              </CardContent>
+            </Card>
 
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() =>
-                    setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+            <Card>
+              <CardHeader>
+                <CardTitle>
+                  Liste des produits ({filteredProducts.length})
+                  {totalPages > 1 && ` - Page ${currentPage}/${totalPages}`}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Produit</TableHead>
+                      <TableHead>Référence</TableHead>
+                      <TableHead>Catégorie</TableHead>
+                      <TableHead>Stock</TableHead>
+                      <TableHead>Prix</TableHead>
+                      <TableHead>Fournisseur</TableHead>
+                      <TableHead>Statut</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {paginatedProducts.map((product) => (
+                      <TableRow key={product.id}>
+                        <TableCell className="font-medium">
+                          {product.name}
+                        </TableCell>
+                        <TableCell>{product.reference}</TableCell>
+                        <TableCell>{product.category}</TableCell>
+                        <TableCell>{product.stock}</TableCell>
+                        <TableCell>€{product.price}</TableCell>
+                        <TableCell>{product.supplier}</TableCell>
+                        <TableCell>
+                          {getStatusBadge(product.status, product.stock)}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex space-x-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleEdit(product)}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDelete(product)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+              {/* AJOUT: Composant de pagination */}
+              <div className="flex items-center justify-between px-6 py-4 border-t">
+                <div className="text-sm text-gray-600 dark:text-gray-300">
+                  Affichage de {startIndex + 1} à{" "}
+                  {Math.min(startIndex + itemsPerPage, filteredProducts.length)}{" "}
+                  sur {filteredProducts.length} produits
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      setCurrentPage((prev) => Math.max(prev - 1, 1))
+                    }
+                    disabled={currentPage === 1}
+                  >
+                    Précédent
+                  </Button>
+
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                      const pageNum = i + 1;
+                      return (
+                        <Button
+                          key={pageNum}
+                          variant={
+                            currentPage === pageNum ? "default" : "outline"
+                          }
+                          size="sm"
+                          onClick={() => setCurrentPage(pageNum)}
+                        >
+                          {pageNum}
+                        </Button>
+                      );
+                    })}
+                    {totalPages > 5 && (
+                      <span className="px-2 text-sm text-gray-500 dark:text-gray-300">
+                        ...
+                      </span>
+                    )}
+                  </div>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+                    }
+                    disabled={currentPage === totalPages}
+                  >
+                    Suivant
+                  </Button>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-600 dark:text-gray-300">
+                    Produits par page:
+                  </span>
+                  <Select
+                    value={itemsPerPage.toString()}
+                    onValueChange={(value) => {
+                      setItemsPerPage(Number(value));
+                      setCurrentPage(1); // Reset à la première page
+                    }}
+                  >
+                    <SelectTrigger className="w-20">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="5">5</SelectItem>
+                      <SelectItem value="10">10</SelectItem>
+                      <SelectItem value="20">20</SelectItem>
+                      <SelectItem value="50">50</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </Card>
+          </main>
+        </div>
+
+        {/* Edit Modal */}
+        <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
+          <DialogContent className="max-w-md w-full max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Modifier le produit</DialogTitle>
+              <DialogDescription>
+                Modifiez les informations du produit.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label>Nom du produit</Label>
+                <Input
+                  value={formData.name}
+                  onChange={(e) =>
+                    setFormData({ ...formData, name: e.target.value })
                   }
-                  disabled={currentPage === totalPages}
-                >
-                  Suivant
-                </Button>
+                />
               </div>
 
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-600">
-                  Produits par page:
-                </span>
+              <div className="grid gap-2">
+                <Label>Référence</Label>
+                <Input
+                  value={formData.reference}
+                  onChange={(e) =>
+                    setFormData({ ...formData, reference: e.target.value })
+                  }
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <Label>Catégorie</Label>
                 <Select
-                  value={itemsPerPage.toString()}
-                  onValueChange={(value) => {
-                    setItemsPerPage(Number(value));
-                    setCurrentPage(1); // Reset à la première page
-                  }}
+                  value={formData.category}
+                  onValueChange={(v) =>
+                    setFormData({ ...formData, category: v })
+                  }
                 >
-                  <SelectTrigger className="w-20">
+                  <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="5">5</SelectItem>
-                    <SelectItem value="10">10</SelectItem>
-                    <SelectItem value="20">20</SelectItem>
-                    <SelectItem value="50">50</SelectItem>
+                    {categories.map((c) => (
+                      <SelectItem key={c.id} value={c.name}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label>Stock</Label>
+                  <Input
+                    type="number"
+                    value={formData.stock}
+                    onChange={(e) =>
+                      setFormData({ ...formData, stock: e.target.value })
+                    }
+                  />
+                </div>
+                <div>
+                  <Label>Prix (€)</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={formData.price}
+                    onChange={(e) =>
+                      setFormData({ ...formData, price: e.target.value })
+                    }
+                  />
+                </div>
+              </div>
+
+              <div>
+                <Label>Magasin (optionnel)</Label>
+                <Select
+                  value={formData.warehouse_id}
+                  onValueChange={(v) =>
+                    setFormData({ ...formData, warehouse_id: v })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Sélectionner un magasin" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Aucun</SelectItem>
+                    {warehouses.map((w) => (
+                      <SelectItem key={w.id} value={String(w.id)}>
+                        {w.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label>Fournisseur</Label>
+                <Select
+                  value={formData.supplier}
+                  onValueChange={(v) =>
+                    setFormData({ ...formData, supplier: v })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Sélectionner un fournisseur" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="aucun">Aucun</SelectItem>
+                    {suppliers.map((s) => (
+                      <SelectItem key={s.id} value={s.name}>
+                        {" "}
+                        {/* Utiliser s.name comme valeur */}
+                        {s.name} {/* Afficher s.name */}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label>Description</Label>
+                <Textarea
+                  value={formData.description}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      description: e.target.value,
+                    })
+                  }
+                />
+              </div>
             </div>
-          </Card>
-        </main>
+
+            <DialogFooter className="flex gap-3 pt-6 border-t">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setIsEditModalOpen(false);
+                  resetForm();
+                  setSelectedProduct(null);
+                }}
+                className="flex-1"
+              >
+                Annuler
+              </Button>
+              <Button
+                onClick={handleUpdate}
+                className="bg-blue-600 hover:bg-blue-700 text-white flex-1 font-semibold"
+                disabled={
+                  !formData.name || !formData.reference || !formData.category
+                }
+              >
+                ✓ Enregistrer les modifications
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Delete Modal */}
+        <Dialog open={isDeleteModalOpen} onOpenChange={setIsDeleteModalOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Supprimer le produit</DialogTitle>
+              <DialogDescription>
+                Êtes-vous sûr de vouloir supprimer "{selectedProduct?.name}" ?
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="flex gap-3 pt-6 border-t">
+              <Button
+                variant="outline"
+                onClick={() => setIsDeleteModalOpen(false)}
+                className="flex-1"
+              >
+                Annuler
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={confirmDelete}
+                className="flex-1 font-semibold"
+              >
+                🗑️ Supprimer définitivement
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
-
-      {/* Edit Modal */}
-      <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
-        <DialogContent className="max-w-md w-full max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Modifier le produit</DialogTitle>
-            <DialogDescription>
-              Modifiez les informations du produit.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label>Nom du produit</Label>
-              <Input
-                value={formData.name}
-                onChange={(e) =>
-                  setFormData({ ...formData, name: e.target.value })
-                }
-              />
-            </div>
-
-            <div className="grid gap-2">
-              <Label>Référence</Label>
-              <Input
-                value={formData.reference}
-                onChange={(e) =>
-                  setFormData({ ...formData, reference: e.target.value })
-                }
-              />
-            </div>
-
-            <div className="grid gap-2">
-              <Label>Catégorie</Label>
-              <Select
-                value={formData.category}
-                onValueChange={(v) => setFormData({ ...formData, category: v })}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {categories.map((c) => (
-                    <SelectItem key={c} value={c}>
-                      {c}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <Label>Stock</Label>
-                <Input
-                  type="number"
-                  value={formData.stock}
-                  onChange={(e) =>
-                    setFormData({ ...formData, stock: e.target.value })
-                  }
-                />
-              </div>
-              <div>
-                <Label>Prix (€)</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  value={formData.price}
-                  onChange={(e) =>
-                    setFormData({ ...formData, price: e.target.value })
-                  }
-                />
-              </div>
-            </div>
-
-            <div>
-              <Label>Magasin (optionnel)</Label>
-              <Select
-                value={formData.warehouse_id}
-                onValueChange={(v) =>
-                  setFormData({ ...formData, warehouse_id: v })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Sélectionner un magasin" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Aucun</SelectItem>
-                  {warehouses.map((w) => (
-                    <SelectItem key={w.id} value={String(w.id)}>
-                      {w.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label>Fournisseur</Label>
-              <Select
-                value={formData.supplier}
-                onValueChange={(v) => setFormData({ ...formData, supplier: v })}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="aucun">Aucun</SelectItem>{" "}
-                  {/* CORRECTION : "aucun" au lieu de "" */}
-                  {suppliers.map((s) => (
-                    <SelectItem key={s} value={s}>
-                      {s}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label>Description</Label>
-              <Textarea
-                value={formData.description}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    description: e.target.value,
-                  })
-                }
-              />
-            </div>
-          </div>
-
-          <DialogFooter className="flex gap-3 pt-6 border-t">
-            <Button
-              variant="outline"
-              onClick={() => {
-                setIsEditModalOpen(false);
-                resetForm();
-                setSelectedProduct(null);
-              }}
-              className="flex-1"
-            >
-              Annuler
-            </Button>
-            <Button
-              onClick={handleUpdate}
-              className="bg-blue-600 hover:bg-blue-700 text-white flex-1 font-semibold"
-              disabled={
-                !formData.name || !formData.reference || !formData.category
-              }
-            >
-              ✓ Enregistrer les modifications
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete Modal */}
-      <Dialog open={isDeleteModalOpen} onOpenChange={setIsDeleteModalOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Supprimer le produit</DialogTitle>
-            <DialogDescription>
-              Êtes-vous sûr de vouloir supprimer "{selectedProduct?.name}" ?
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="flex gap-3 pt-6 border-t">
-            <Button
-              variant="outline"
-              onClick={() => setIsDeleteModalOpen(false)}
-              className="flex-1"
-            >
-              Annuler
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={confirmDelete}
-              className="flex-1 font-semibold"
-            >
-              🗑️ Supprimer définitivement
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
+    </RoleGuard>
   );
 }

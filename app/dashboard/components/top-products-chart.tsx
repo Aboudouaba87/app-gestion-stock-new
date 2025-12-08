@@ -6,8 +6,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/app/dashboard/components/ui/card";
-import { data } from "../app/types/topProduit";
-
 import {
   BarChart,
   Bar,
@@ -19,19 +17,89 @@ import {
   Legend,
 } from "recharts";
 
-// const data = [
-//   { name: "Dell XPS 13", value: 45 },
-//   { name: "iPhone 14 Pro", value: 38 },
-//   { name: "Galaxy S23", value: 32 },
-//   { name: "iPad Air M1", value: 28 },
-//   { name: "iPad Pro", value: 25 },
-// ];
+export function TopProductsChart({
+  data = [],
+  loading = false,
+  error = null,
+}: {
+  data: any[];
+  loading?: boolean;
+  error?: any;
+}) {
+  if (loading) {
+    return (
+      <Card className="bg-white dark:bg-gray-900 dark:text-gray-300">
+        <CardHeader>
+          <CardTitle className="text-lg font-semibold">
+            Top 5 produits
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="h-80 flex items-center justify-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
-export function TopProductsChart({ data: data }: { data: data[] }) {
+  if (error) {
+    return (
+      <Card className="bg-white dark:bg-gray-900 dark:text-gray-300">
+        <CardHeader>
+          <CardTitle className="text-lg font-semibold">
+            Top 5 produits
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="h-80 flex items-center justify-center">
+            <p className="text-red-500">Erreur de chargement</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Si pas de données, afficher un message
+  if (!data || data.length === 0) {
+    return (
+      <Card className="bg-white dark:bg-gray-900 dark:text-gray-300">
+        <CardHeader>
+          <CardTitle className="text-lg font-semibold">
+            Top 5 produits
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="h-80 flex items-center justify-center">
+            <p className="text-gray-500">Aucun produit vendu récemment</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Formater les données selon votre structure
+  // Trier par quantité vendue (total_quantity) descendant
+  const formattedData = data
+    .map((item) => ({
+      name: item.name || "Produit sans nom",
+      // Utiliser total_quantity pour pv (quantité vendue)
+      pv: parseInt(item.total_quantity) || 0,
+      // Utiliser total_revenue pour uv (revenu généré)
+      uv: parseFloat(item.total_revenue) || 0,
+      amt: parseFloat(item.total_revenue) || 0,
+    }))
+    .sort((a, b) => b.pv - a.pv); // Trier du plus vendu au moins vendu
+
+  // Limiter à 5 produits maximum
+  const displayData = formattedData.slice(0, 5);
+
   return (
-    <Card className="bg-white">
+    <Card className="bg-white dark:bg-gray-900 dark:text-gray-300">
       <CardHeader>
-        <CardTitle className="text-lg font-semibold">Top produits</CardTitle>
+        <CardTitle className="text-lg font-semibold">
+          Top 5 produits (30 derniers jours)
+        </CardTitle>
       </CardHeader>
       <CardContent>
         <div className="h-80 flex flex-col justify-center space-y-6">
@@ -43,7 +111,7 @@ export function TopProductsChart({ data: data }: { data: data[] }) {
               aspectRatio: 1.618,
             }}
             responsive
-            data={data}
+            data={displayData}
             margin={{
               top: 5,
               right: 0,
@@ -51,27 +119,38 @@ export function TopProductsChart({ data: data }: { data: data[] }) {
               bottom: 5,
             }}
           >
+            <CartesianGrid strokeDasharray="3 3" />
             <XAxis
               dataKey="name"
-              stroke="#8884d8"
-              angle={-30}
+              angle={-45}
               textAnchor="end"
+              height={60}
+              tick={{ fontSize: 12 }}
             />
-            <YAxis />
-            <Tooltip wrapperStyle={{ width: 100, backgroundColor: "#ccc" }} />
+            <YAxis width="auto" />
+            <Tooltip
+              formatter={(value, name) => {
+                if (name === "pv")
+                  return [`${value} unités`, "Quantité vendue"];
+                if (name === "uv")
+                  return [`${Number(value).toFixed(2)} €`, "Revenu généré"];
+                return [value, name];
+              }}
+              labelFormatter={(label) => `Produit: ${label}`}
+            />
             <Legend
-              width={100}
-              wrapperStyle={{
-                top: 40,
-                right: 20,
-                backgroundColor: "#f5f5f5",
-                border: "1px solid #d5d5d5",
-                borderRadius: 3,
-                lineHeight: "40px",
+              formatter={(value) => {
+                if (value === "pv") return "Quantité vendue";
+                if (value === "uv") return "Revenu (€)";
+                return value;
               }}
             />
-            <CartesianGrid stroke="#ccc" strokeDasharray="3 3" />
-            <Bar dataKey="value" fill="#8884d8" barSize={30} />
+            <Bar
+              dataKey="pv"
+              fill="#8884d8"
+              activeBar={<Rectangle fill="green" stroke="blue" />}
+              barSize={40} // Un peu plus large pour 5 produits
+            />
           </BarChart>
         </div>
       </CardContent>

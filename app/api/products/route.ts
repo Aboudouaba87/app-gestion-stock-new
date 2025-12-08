@@ -1,58 +1,87 @@
 import { NextRequest, NextResponse } from "next/server";
-import pool from "@/lib/db";
+import { pool } from "@/lib/db";
+import { getCurrentUser } from "@/lib/auth";
 
-console.log("✅ API Products route loaded");
-
+// Helper commun
 function toNumberSafe(v: any, fallback = 0) {
   const n = Number(v);
   return Number.isNaN(n) ? fallback : n;
 }
 
-// GET - Récupérer tous les produits
 export async function GET() {
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+    }
+
+    const companyId = Number(user.company_id);
+    if (!companyId || Number.isNaN(companyId)) {
+      console.error("❌ company_id invalide dans la session:", user.company_id);
+      return NextResponse.json(
+        { error: "company_id invalide pour l'utilisateur connecté" },
+        { status: 500 }
+      );
+    }
+
     const result = await pool.query(
-      `SELECT products.id, user_id, name, reference, category, stock, price, supplier, status, description, products.created_at, products.updated_at
-       FROM products
-       ORDER BY products.id ASC`
+      `SELECT p.id, p.user_id, p.name, p.reference, p.category,
+              p.stock, p.price, p.supplier, p.status, p.description,
+              p.created_at, p.updated_at
+       FROM products p
+       WHERE p.company_id = $1
+       ORDER BY p.id ASC`,
+      [companyId]
     );
+
     return NextResponse.json(result.rows, { status: 200 });
   } catch (err: any) {
     console.error("Erreur PostgreSQL (GET) :", err);
-    return NextResponse.json({ error: err?.message ?? "Erreur serveur" }, { status: 500 });
+    return NextResponse.json(
+      { error: err?.message ?? "Erreur serveur" },
+      { status: 500 }
+    );
   }
 }
 
-// POST - Créer un nouveau produit
+
+
+
+// Fonction POST - Créer un nouveau produit pour la company de l'utilisateur connecté
 export async function POST(request: NextRequest) {
   const client = await pool.connect();
+
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+    }
+
     const body = await request.json();
     console.log("📨 POST /api/products - Body reçu:", body);
 
     const {
-      user_id,
       name,
       reference,
       category,
       stock,
       price,
+      cost_price = null, // 🔥 AJOUT
       supplier,
       status,
       description,
       warehouse_id,
     } = body ?? {};
 
-    if (!user_id || !name || !reference) {
+    if (!name || !reference) {
       return NextResponse.json(
-        { error: "Champs 'user_id', 'name' et 'reference' requis" },
+        { error: "Champs 'name' et 'reference' requis" },
         { status: 400 }
       );
     }
 
     const initialStock = toNumberSafe(stock, 0);
 
-    // CORRECTION : Les warehouses utilisent des textes (main, south, north)
     const finalWarehouseId =
       warehouse_id &&
         warehouse_id !== "none" &&
@@ -61,144 +90,160 @@ export async function POST(request: NextRequest) {
         ? String(warehouse_id)
         : null;
 
-    console.log("🏪 Warehouse_id final:", finalWarehouseId);
-    console.log("📊 Stock initial:", initialStock);
-    console.log("🔖 Référence:", reference);
-
     await client.query("BEGIN");
 
-    // Vérifier si la référence existe déjà
+    // Unicité de la référence dans la même company
     const existingProduct = await client.query(
-      `SELECT id FROM products WHERE reference = $1`,
-      [reference]
+      `SELECT id FROM products
+       WHERE reference = $1 AND company_id = $2`,
+      [reference, user.company_id]
     );
 
     if (existingProduct.rowCount > 0) {
       await client.query("ROLLBACK");
       return NextResponse.json(
         {
-          error: `La référence "${reference}" existe déjà. Veuillez utiliser une référence unique.`,
+          error: `La référence "${reference}" existe déjà pour cette entreprise.`,
         },
         { status: 409 }
       );
     }
 
     const insertProduct = await client.query(
-      `INSERT INTO products
-        (user_id, name, reference, category, stock, price, supplier, status, description, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW(),NOW())
-       RETURNING *`,
+      `INSERT INTO products (
+        user_id, name, reference, category, stock, price,
+        cost_price, supplier, description, status, company_id, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW())
+      RETURNING *`,
       [
-        Number(user_id),
-        String(name),
-        String(reference),
-        category ?? null,
-        initialStock,
-        toNumberSafe(price, 0),
-        supplier ?? null,
-        status ??
-        (initialStock === 0
-          ? "out_of_stock"
-          : initialStock <= 10
-            ? "low_stock"
-            : "active"),
-        description ?? null,
+        user.id,
+        name,
+        reference,
+        category,
+        stock,
+        price,
+        cost_price, // 🔥 SAUVEGARDE
+        supplier,
+        description,
+        status,
+        user.company_id,
       ]
     );
 
     const newProduct = insertProduct.rows[0];
-    console.log("✅ Produit créé avec ID:", newProduct.id);
 
-    // CORRECTION : Gestion des entrepôts avec valeurs textuelles
+    // Vérification warehouse dans la même company
     if (finalWarehouseId) {
-      console.log("🏪 Insertion dans product_warehouses avec warehouse:", finalWarehouseId);
-
-      // Vérifier que le warehouse existe
       const warehouseCheck = await client.query(
-        `SELECT value FROM warehouses WHERE value = $1`,
-        [finalWarehouseId]
+        `SELECT id, value
+         FROM warehouses
+         WHERE value = $1 AND company_id = $2`,
+        [finalWarehouseId, user.company_id]
       );
 
       if (warehouseCheck.rowCount === 0) {
         await client.query("ROLLBACK");
-        console.log("❌ Warehouse non trouvé:", finalWarehouseId);
         return NextResponse.json(
-          { error: `L'entrepôt "${finalWarehouseId}" n'existe pas` },
+          {
+            error: `L'entrepôt "${finalWarehouseId}" n'existe pas pour cette entreprise.`,
+          },
           { status: 400 }
         );
       }
 
+      const warehouseRow = warehouseCheck.rows[0];
+
+      // product_warehouses: stock par entrepôt
       await client.query(
-        `INSERT INTO product_warehouses (product_id, warehouse_value, stock, reserved, last_updated)
-         VALUES ($1, $2, $3, $4, NOW())
-         ON CONFLICT (product_id, warehouse_value) DO UPDATE
-         SET stock = EXCLUDED.stock, reserved = EXCLUDED.reserved, last_updated = NOW()`,
-        [newProduct.id, finalWarehouseId, initialStock, 0]
+        `INSERT INTO product_warehouses (
+           product_id, warehouse_value, company_id,
+           stock, reserved, last_updated
+         )
+         VALUES ($1, $2, $3, $4, $5, NOW())
+         ON CONFLICT (product_id, warehouse_value, company_id) DO UPDATE
+         SET stock = EXCLUDED.stock,
+             reserved = EXCLUDED.reserved,
+             last_updated = NOW()`,
+        [newProduct.id, warehouseRow.value, user.company_id, initialStock, 0]
       );
 
-      // Enregistrement du mouvement de stock pour l'ajout
+      // stock_movements: mouvement d'entrée initial
       if (initialStock > 0) {
-        console.log("📝 Création du mouvement de stock pour l'ajout");
+        console.log("📝 Création mouvement initial:", {
+          productId: newProduct.id,
+          company_id: user.company_id,
+          user_id: user.id,
+          quantity: initialStock,
+          warehouse_id: warehouseRow.id,
+        });
 
-        const movementResult = await client.query(
+        await client.query(
           `INSERT INTO stock_movements (
-             product_id, type, movement_type, quantity,
-             from_warehouse, to_warehouse,
+             product_id, company_id, user_id,
+             type, movement_type, quantity,
+             from_warehouse_id, to_warehouse_id,
              reference, created_at, metadata
            )
-           VALUES ($1, 'in', 'IN', $2, NULL, $3, $4, NOW(), $5)
-           RETURNING id`,
+           VALUES (
+             $1, $2, $3,
+             $4, $5, $6,
+             $7, $8,
+             $9, NOW(), $10
+           )`,
           [
             newProduct.id,
+            user.company_id,
+            user.id,
+            "in",           // type (direction logique)
+            "IN",           // movement_type (IN/OUT)
             initialStock,
-            finalWarehouseId,
-            `AJOUT-${reference}`,
+            null,           // from_warehouse_id (entrée)
+            warehouseRow.id, // to_warehouse_id
+            `CREATION-${reference}`,
             JSON.stringify({
               product_name: name,
               action: "creation",
               initial_stock: initialStock,
-              warehouse: finalWarehouseId
+              warehouse_value: warehouseRow.value,
+              warehouse_id: warehouseRow.id,
             }),
           ]
         );
-
-        console.log(
-          "✅ Mouvement de stock créé avec ID:",
-          movementResult.rows[0]?.id
-        );
-      } else {
-        console.log("ℹ️ Stock initial à 0, pas de mouvement créé");
       }
-    } else {
-      console.log("❌ Aucun warehouse_id spécifié, pas de mouvement de stock");
     }
 
+    // Recalcule le stock global depuis product_warehouses
     await client.query(
       `UPDATE products
-       SET stock = COALESCE((
-         SELECT SUM(stock)::int FROM product_warehouses WHERE product_id = $1
-       ), $2),
+       SET stock = COALESCE(
+         (SELECT SUM(stock)::int
+          FROM product_warehouses
+          WHERE product_id = $1
+            AND company_id = $2),
+         $3
+       ),
        updated_at = NOW()
        WHERE id = $1`,
-      [newProduct.id, initialStock]
+      [newProduct.id, user.company_id, initialStock]
     );
 
     await client.query("COMMIT");
 
-    const fresh = await client.query(`SELECT * FROM products WHERE id = $1`, [
-      newProduct.id,
-    ]);
+    const fresh = await client.query(
+      `SELECT * FROM products WHERE id = $1 AND company_id = $2`,
+      [newProduct.id, user.company_id]
+    );
+
     return NextResponse.json(fresh.rows[0], { status: 201 });
   } catch (err: any) {
     await client.query("ROLLBACK");
     console.error("❌ Erreur PostgreSQL (POST) :", err);
 
-    // Gestion spécifique des erreurs de contrainte unique
     if (err.code === "23505") {
       return NextResponse.json(
         {
           error:
-            "Cette référence existe déjà dans la base de données. Veuillez utiliser une référence unique.",
+            "Cette référence existe déjà dans la base pour cette entreprise.",
         },
         { status: 409 }
       );
@@ -213,11 +258,18 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// PUT - Modifier un produit
+
+// PUT pour modifier un produit et DELETE pour supprimer un produit peuvent être ajoutés ici de manière similaire,
+
 export async function PUT(request: NextRequest) {
   const client = await pool.connect();
   try {
     console.log("✅ PUT /api/products called");
+
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+    }
 
     const body = await request.json();
     console.log("📦 PUT Request body:", body);
@@ -225,7 +277,6 @@ export async function PUT(request: NextRequest) {
     const {
       id,
       product_id,
-      user_id,
       name,
       reference,
       category,
@@ -237,7 +288,6 @@ export async function PUT(request: NextRequest) {
       warehouse_id,
     } = body;
 
-    // Utiliser id ou product_id
     const productId = id || product_id;
     if (!productId) {
       return NextResponse.json(
@@ -248,7 +298,6 @@ export async function PUT(request: NextRequest) {
 
     const newStock = toNumberSafe(newStockRaw, 0);
 
-    // CORRECTION : Les warehouses utilisent des textes (main, south, north)
     const finalWarehouseId =
       warehouse_id &&
         warehouse_id !== "none" &&
@@ -257,46 +306,20 @@ export async function PUT(request: NextRequest) {
         ? String(warehouse_id)
         : null;
 
-    console.log("🏪 Warehouse_id final:", finalWarehouseId);
-    console.log("📊 Nouveau stock:", newStock);
-
     await client.query("BEGIN");
 
-    // CORRECTION : Vérifier si le warehouse existe (avec texte)
-    if (finalWarehouseId) {
-      const warehouseCheck = await client.query(
-        `SELECT value FROM warehouses WHERE value = $1`,
-        [finalWarehouseId]
-      );
-
-      if (warehouseCheck.rowCount === 0) {
-        await client.query("ROLLBACK");
-        console.log("❌ Warehouse non trouvé:", finalWarehouseId);
-
-        // Afficher les warehouses disponibles pour debug
-        const availableWarehouses = await client.query(
-          `SELECT value, label FROM warehouses`
-        );
-        console.log("🏪 Warehouses disponibles:", availableWarehouses.rows);
-
-        return NextResponse.json(
-          { error: `L'entrepôt "${finalWarehouseId}" n'existe pas. Entrepôts disponibles: ${availableWarehouses.rows.map(w => w.value).join(', ')}` },
-          { status: 400 }
-        );
-      }
-      console.log("✅ Warehouse trouvé:", finalWarehouseId);
-    }
-
-    // Récupérer l'ancien produit
+    // Produit de cette company ?
     const oldProductRes = await client.query(
-      `SELECT name, reference, stock FROM products WHERE id = $1`,
-      [productId]
+      `SELECT id, name, reference, stock
+       FROM products
+       WHERE id = $1 AND company_id = $2`,
+      [productId, user.company_id]
     );
 
     if (oldProductRes.rowCount === 0) {
       await client.query("ROLLBACK");
       return NextResponse.json(
-        { error: "Produit non trouvé" },
+        { error: "Produit non trouvé pour cette entreprise" },
         { status: 404 }
       );
     }
@@ -309,17 +332,27 @@ export async function PUT(request: NextRequest) {
       ancien: oldStock,
       nouveau: newStock,
       difference: stockDifference,
+      warehouse: finalWarehouseId,
     });
 
-    // Mettre à jour le produit
+    // Mise à jour du produit
     const updateRes = await client.query(
       `UPDATE products SET
-         user_id = $1, name = $2, reference = $3, category = $4, stock = $5, price = $6,
-         supplier = $7, status = $8, description = $9, updated_at = NOW()
+         user_id = $1,
+         name = $2,
+         reference = $3,
+         category = $4,
+         stock = $5,
+         price = $6,
+         supplier = $7,
+         status = $8,
+         description = $9,
+         updated_at = NOW()
        WHERE id = $10
+         AND company_id = $11
        RETURNING *`,
       [
-        toNumberSafe(user_id, 1),
+        user.id,
         String(name || oldProduct.name),
         String(reference || oldProduct.reference),
         category ?? null,
@@ -334,62 +367,112 @@ export async function PUT(request: NextRequest) {
             : "active"),
         description ?? null,
         productId,
+        user.company_id,
       ]
     );
 
-    console.log("✅ Produit mis à jour");
+    if (updateRes.rowCount === 0) {
+      await client.query("ROLLBACK");
+      return NextResponse.json(
+        { error: "Produit non trouvé ou non autorisé" },
+        { status: 404 }
+      );
+    }
 
-    // CORRECTION : Gestion des entrepôts avec finalWarehouseId (texte)
+    // Gestion des entrepôts + mouvements
+    let warehouseRow: { id: number; value: string } | null = null;
+
     if (finalWarehouseId) {
-      console.log("🏪 Traitement de l'entrepôt:", finalWarehouseId);
+      const warehouseCheck = await client.query(
+        `SELECT id, value
+         FROM warehouses
+         WHERE value = $1 AND company_id = $2`,
+        [finalWarehouseId, user.company_id]
+      );
 
-      // Récupérer l'ancien stock de l'entrepôt
+      if (warehouseCheck.rowCount === 0) {
+        await client.query("ROLLBACK");
+        const availableWarehouses = await client.query(
+          `SELECT value FROM warehouses WHERE company_id = $1`,
+          [user.company_id]
+        );
+
+        return NextResponse.json(
+          {
+            error: `L'entrepôt "${finalWarehouseId}" n'existe pas pour cette entreprise. Entrepôts disponibles: ${availableWarehouses.rows
+              .map((w) => w.value)
+              .join(", ")}`,
+          },
+          { status: 400 }
+        );
+      }
+
+      warehouseRow = warehouseCheck.rows[0];
+
+      // Ancien stock dans cet entrepôt
       const oldWarehouseRes = await client.query(
-        `SELECT stock FROM product_warehouses WHERE product_id = $1 AND warehouse_value = $2`,
-        [productId, finalWarehouseId]
+        `SELECT stock
+         FROM product_warehouses
+         WHERE product_id = $1
+           AND warehouse_value = $2
+           AND company_id = $3`,
+        [productId, warehouseRow.value, user.company_id]
       );
 
       const oldWarehouseStock =
         oldWarehouseRes.rowCount > 0 ? oldWarehouseRes.rows[0].stock : 0;
 
-      console.log("🏪 Ancien stock entrepôt:", oldWarehouseStock);
-
-      // Mettre à jour ou insérer dans product_warehouses
+      // Upsert product_warehouses
       await client.query(
-        `INSERT INTO product_warehouses (product_id, warehouse_value, stock, reserved, last_updated)
-         VALUES ($1, $2, $3, $4, NOW())
-         ON CONFLICT (product_id, warehouse_value) DO UPDATE
-         SET stock = $3, last_updated = NOW()`,
-        [productId, finalWarehouseId, newStock, 0]
+        `INSERT INTO product_warehouses (
+           product_id, warehouse_value, company_id,
+           stock, reserved, last_updated
+         )
+         VALUES ($1, $2, $3, $4, $5, NOW())
+         ON CONFLICT (product_id, warehouse_value, company_id) DO UPDATE
+         SET stock = EXCLUDED.stock,
+             reserved = EXCLUDED.reserved,
+             last_updated = NOW()`,
+        [productId, warehouseRow.value, user.company_id, newStock, 0]
       );
 
-      console.log("✅ Product_warehouses mis à jour");
-
-      // Enregistrer le mouvement de stock si différence
       if (stockDifference !== 0) {
         const movementType = stockDifference > 0 ? "IN" : "OUT";
         const movementDirection = stockDifference > 0 ? "in" : "out";
 
-        console.log("📝 Création mouvement de stock:", {
+        console.log("📝 Insertion stock_movements avec:", {
+          productId,
+          company_id: user.company_id,
+          user_id: user.id,
+          direction: movementDirection,
           type: movementType,
-          quantité: Math.abs(stockDifference),
+          quantity: Math.abs(stockDifference),
+          from_warehouse_id: stockDifference > 0 ? null : warehouseRow.id,
+          to_warehouse_id: stockDifference > 0 ? warehouseRow.id : null,
         });
 
-        const movementResult = await client.query(
+        await client.query(
           `INSERT INTO stock_movements (
-             product_id, type, movement_type, quantity,
-             from_warehouse, to_warehouse,
+             product_id, company_id, user_id,
+             type, movement_type, quantity,
+             from_warehouse_id, to_warehouse_id,
              reference, created_at, metadata
            )
-           VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), $8)
-           RETURNING id`,
+           VALUES (
+             $1, $2, $3,
+             $4, $5, $6,
+             $7, $8,
+             $9, NOW(), $10
+           )`,
           [
             productId,
+            user.company_id,
+            user.id,
             movementDirection,
             movementType,
             Math.abs(stockDifference),
-            stockDifference > 0 ? null : finalWarehouseId,
-            stockDifference > 0 ? finalWarehouseId : null,
+            stockDifference > 0 ? null : warehouseRow.id,
+            stockDifference > 0 ? warehouseRow.id : null,
             `MODIF-${oldProduct.reference}`,
             JSON.stringify({
               product_name: oldProduct.name,
@@ -397,34 +480,47 @@ export async function PUT(request: NextRequest) {
               old_stock: oldStock,
               new_stock: newStock,
               difference: stockDifference,
-              warehouse: finalWarehouseId,
+              warehouse_value: warehouseRow.value,
+              warehouse_id: warehouseRow.id,
               old_warehouse_stock: oldWarehouseStock,
               new_warehouse_stock: newStock,
             }),
           ]
         );
-
-        console.log(
-          "✅ Mouvement de stock créé avec ID:",
-          movementResult.rows[0]?.id
-        );
-      } else {
-        console.log("ℹ️ Pas de différence de stock, pas de mouvement créé");
       }
     } else {
-      // Si pas d'entrepôt spécifié, supprimer les entrées d'entrepôt
-      console.log("❌ Aucun warehouse_id spécifié, suppression des entrepôts");
-      await client.query(`DELETE FROM product_warehouses WHERE product_id = $1`, [
-        productId,
-      ]);
+      // pas d'entrepôt: on nettoie les lignes d'entrepôt
+      await client.query(
+        `DELETE FROM product_warehouses
+         WHERE product_id = $1
+           AND company_id = $2`,
+        [productId, user.company_id]
+      );
     }
+
+    // Recalcule le stock global depuis product_warehouses
+    await client.query(
+      `UPDATE products
+       SET stock = COALESCE(
+         (SELECT SUM(stock)::int
+          FROM product_warehouses
+          WHERE product_id = $1
+            AND company_id = $2),
+         $3
+       ),
+       updated_at = NOW()
+       WHERE id = $1
+         AND company_id = $2`,
+      [productId, user.company_id, newStock]
+    );
 
     await client.query("COMMIT");
 
-    // Récupérer le produit mis à jour
     const freshProduct = await client.query(
-      `SELECT * FROM products WHERE id = $1`,
-      [productId]
+      `SELECT *
+       FROM products
+       WHERE id = $1 AND company_id = $2`,
+      [productId, user.company_id]
     );
 
     console.log("✅ Product updated successfully");
@@ -443,100 +539,140 @@ export async function PUT(request: NextRequest) {
   }
 }
 
-// DELETE - Supprimer un produit
+
+
+// DELETE - Supprimer un produit de la company de l'utilisateur connecté
 export async function DELETE(request: NextRequest) {
   const client = await pool.connect();
   try {
-    console.log("🔍 DELETE API called");
+    console.log("🔍 DELETE /api/products called");
+
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+    }
 
     const { searchParams } = new URL(request.url);
     const idParam = searchParams.get("id");
 
-    console.log("📦 Raw idParam from URL:", idParam);
-
     if (!idParam) {
-      return NextResponse.json({
-        error: "Paramètre 'id' requis"
-      }, { status: 400 });
+      return NextResponse.json(
+        { error: "Paramètre 'id' requis" },
+        { status: 400 }
+      );
     }
 
     const productId = Number(idParam);
-    console.log("🔢 Parsed productId:", productId);
-
     if (!productId || Number.isNaN(productId)) {
-      return NextResponse.json({
-        error: "Paramètre 'id' requis et valide"
-      }, { status: 400 });
+      return NextResponse.json(
+        { error: "Paramètre 'id' requis et valide" },
+        { status: 400 }
+      );
     }
 
     await client.query("BEGIN");
 
-    // Récupérer les informations du produit avant suppression
+    // Produit + vérif company
     const productInfo = await client.query(
-      `SELECT name, reference, stock FROM products WHERE id = $1`,
-      [productId]
+      `SELECT id, name, reference, stock
+       FROM products
+       WHERE id = $1 AND company_id = $2`,
+      [productId, user.company_id]
     );
 
     if (productInfo.rowCount === 0) {
       await client.query("ROLLBACK");
-      return NextResponse.json({ error: "Produit non trouvé" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Produit non trouvé pour cette entreprise" },
+        { status: 404 }
+      );
     }
 
-    const productName = productInfo.rows[0].name;
-    const productReference = productInfo.rows[0].reference;
-    const productStock = productInfo.rows[0].stock;
+    const { name, reference, stock } = productInfo.rows[0];
 
-    // Récupérer les stocks par entrepôt avant suppression
+    // Stocks par entrepôt pour cette company avec l'ID de l'entrepôt
     const warehouseStocks = await client.query(
-      `SELECT warehouse_value, stock FROM product_warehouses WHERE product_id = $1`,
-      [productId]
+      `SELECT pw.warehouse_value, pw.stock, w.id as warehouse_id
+       FROM product_warehouses pw
+       LEFT JOIN warehouses w ON w.value = pw.warehouse_value AND w.company_id = pw.company_id
+       WHERE pw.product_id = $1
+         AND pw.company_id = $2`,
+      [productId, user.company_id]
     );
 
-    // Enregistrement des mouvements de stock pour la suppression
+    console.log("📦 Stocks par entrepôt:", warehouseStocks.rows);
+
+    // Mouvement de sortie pour chaque entrepôt
     for (const warehouse of warehouseStocks.rows) {
       if (warehouse.stock > 0) {
+        // Utiliser warehouse.id (bigint) au lieu de warehouse_value (string)
         await client.query(
           `INSERT INTO stock_movements (
-             product_id, type, movement_type, quantity,
-             from_warehouse, to_warehouse,
+             product_id, company_id, user_id,
+             type, movement_type, quantity,
+             from_warehouse_id, to_warehouse_id,
              reference, created_at, metadata
            )
-           VALUES ($1, 'out', 'ADJUST', $2, $3, NULL, $4, NOW(), $5)`,
+           VALUES (
+             $1, $2, $3,
+             'out', 'ADJUST', $4,
+             $5, NULL,
+             $6, NOW(), $7
+           )`,
           [
             productId,
+            user.company_id,
+            user.id,
             warehouse.stock,
-            warehouse.warehouse_value,
-            `SUPPR-${productReference}`,
+            warehouse.warehouse_id, // <-- CORRECTION: Utiliser l'ID (bigint) au lieu de la valeur (string)
+            `SUPPR-${reference}`,
             JSON.stringify({
-              product_name: productName,
-              action: 'delete',
-              warehouse: warehouse.warehouse_value,
-              stock_removed: warehouse.stock
-            })
+              product_name: name,
+              action: "delete",
+              warehouse_value: warehouse.warehouse_value, // Conserver la valeur dans metadata
+              warehouse_id: warehouse.warehouse_id,
+              stock_removed: warehouse.stock,
+            }),
           ]
         );
       }
     }
 
-    // Supprimer les données associées
-    await client.query(`DELETE FROM product_warehouses WHERE product_id = $1`, [productId]);
-    const del = await client.query(`DELETE FROM products WHERE id = $1 RETURNING *`, [productId]);
+    // Supprimer les lignes d'entrepôt pour cette company
+    await client.query(
+      `DELETE FROM product_warehouses
+       WHERE product_id = $1
+         AND company_id = $2`,
+      [productId, user.company_id]
+    );
+
+    // Supprimer le produit (scopé par company_id)
+    const del = await client.query(
+      `DELETE FROM products
+       WHERE id = $1 AND company_id = $2
+       RETURNING *`,
+      [productId, user.company_id]
+    );
 
     if (del.rowCount === 0) {
       await client.query("ROLLBACK");
-      return NextResponse.json({ error: "Produit non trouvé" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Produit non trouvé ou non autorisé" },
+        { status: 404 }
+      );
     }
 
     await client.query("COMMIT");
 
     console.log("✅ Product deleted successfully:", productId);
-    return NextResponse.json({
-      message: "Produit supprimé avec succès",
-      deleted_product: del.rows[0]
-    }, { status: 200 });
-
+    return NextResponse.json(
+      {
+        message: "Produit supprimé avec succès",
+        deleted_product: del.rows[0],
+      },
+      { status: 200 }
+    );
   } catch (err: any) {
-    // Rollback sécurisé
     try {
       await client.query("ROLLBACK");
     } catch (rollbackErr) {
@@ -544,9 +680,12 @@ export async function DELETE(request: NextRequest) {
     }
 
     console.error("❌ DELETE Error:", err);
-    return NextResponse.json({
-      error: err?.message ?? "Erreur serveur lors de la suppression"
-    }, { status: 500 });
+    return NextResponse.json(
+      {
+        error: err?.message ?? "Erreur serveur lors de la suppression",
+      },
+      { status: 500 }
+    );
   } finally {
     client.release();
   }

@@ -48,6 +48,9 @@ import {
 } from "@/app/dashboard/components/ui/dialog";
 import { Label } from "@/app/dashboard/components/ui/label";
 import { Textarea } from "@/app/dashboard/components/ui/textarea";
+import { toast } from "sonner";
+import { RoleGuard } from "../components/auth/role-guard";
+import { useSession } from "next-auth/react";
 
 // Types pour les données
 interface StockMovement {
@@ -140,6 +143,19 @@ export default function StocksPage() {
     realStock: "",
     reason: "",
   });
+
+  // Session utilisateur
+  const [isAdmin, setIsAdmin] = useState(false);
+  const { data: session, status } = useSession();
+  useEffect(() => {
+    if (session?.user.role === "admin") {
+      setIsAdmin(true);
+    } else {
+      setIsAdmin(false);
+    }
+  }, [session?.user.role]);
+
+  console.log("La session de l'utilisateur est : ", isAdmin);
 
   // Chargement des données depuis l'API
   useEffect(() => {
@@ -248,13 +264,13 @@ export default function StocksPage() {
         });
         setIsNewMovementOpen(false);
 
-        alert("Mouvement créé avec succès !");
+        toast.success("Mouvement créé avec succès !");
       } else {
         throw new Error(result.error);
       }
     } catch (error) {
       console.error("Erreur mouvement:", error);
-      alert(
+      toast.error(
         "Erreur lors de la création: " +
           (error instanceof Error ? error.message : String(error))
       );
@@ -271,7 +287,7 @@ export default function StocksPage() {
       return;
 
     if (transfer.warehouseFrom === transfer.warehouseTo) {
-      alert("L'entrepôt source et destination doivent être différents");
+      toast.error("L'entrepôt source et destination doivent être différents");
       return;
     }
 
@@ -319,13 +335,13 @@ export default function StocksPage() {
         });
         setIsTransferOpen(false);
 
-        alert("Transfert effectué avec succès !");
+        toast.success("Transfert effectué avec succès !");
       } else {
         throw new Error(result.error);
       }
     } catch (error) {
       console.error("Erreur transfert:", error);
-      alert(
+      toast.error(
         "Erreur lors du transfert: " +
           (error instanceof Error ? error.message : String(error))
       );
@@ -376,13 +392,13 @@ export default function StocksPage() {
         });
         setIsAdjustmentOpen(false);
 
-        alert("Ajustement effectué avec succès !");
+        toast.success("Ajustement effectué avec succès !");
       } else {
         throw new Error(result.error);
       }
     } catch (error) {
       console.error("Erreur ajustement:", error);
-      alert(
+      toast.error(
         "Erreur lors de l'ajustement: " +
           (error instanceof Error ? error.message : String(error))
       );
@@ -412,13 +428,13 @@ export default function StocksPage() {
         setProducts(stockData.products);
         setDeletingMovement(null);
 
-        alert("Mouvement supprimé avec succès !");
+        toast.success("Mouvement supprimé avec succès !");
       } else {
         throw new Error(result.error);
       }
     } catch (error) {
       console.error("Erreur suppression:", error);
-      alert(
+      toast.error(
         "Erreur lors de la suppression: " +
           (error instanceof Error ? error.message : String(error))
       );
@@ -460,7 +476,7 @@ export default function StocksPage() {
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-            <p className="mt-4 text-gray-600">
+            <p className="mt-4 text-gray-600 dark:text-gray-300">
               Chargement des données stock...
             </p>
           </div>
@@ -486,109 +502,90 @@ export default function StocksPage() {
   }
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
-      <Sidebar />
+    <RoleGuard allowedRoles={["admin", "manager"]}>
+      <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900 dark:text-white">
+        <Sidebar />
 
-      <div className="flex-1 flex flex-col">
-        {/* Header */}
-        <header className="bg-white border-b border-gray-200 px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">
-                Gestion des Stocks
-              </h1>
-              <p className="text-gray-600">
-                Suivez et gérez vos mouvements de stock
-              </p>
-            </div>
-            <div className="flex space-x-2">
-              <Dialog open={isTransferOpen} onOpenChange={setIsTransferOpen}>
-                <DialogTrigger asChild>
-                  <Button variant="outline">
-                    <ArrowRightLeft className="h-4 w-4 mr-2" />
-                    Transfert
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-md">
-                  <DialogHeader>
-                    <DialogTitle>Transfert entre entrepôts</DialogTitle>
-                  </DialogHeader>
-                  <div className="space-y-4">
-                    <div>
-                      <Label htmlFor="trf-product">Produit</Label>
-                      <Select
-                        value={transfer.product}
-                        onValueChange={(value) =>
-                          setTransfer({ ...transfer, product: value })
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Sélectionner un produit" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {products.map((product) => (
-                            <SelectItem
-                              key={product.id}
-                              value={product.id.toString()}
-                            >
-                              {product.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
+        <div className="flex-1 flex flex-col">
+          {/* Header */}
+          <header className="bg-white border-b border-gray-200 px-6 py-4 dark:bg-gray-900 dark:text-white">
+            <div className="flex items-center justify-between">
+              <div className="ml-10 lg:ml-0">
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-300">
+                  Gestion des Stocks
+                </h1>
+                <p className="text-gray-600 dark:text-gray-400">
+                  Suivez et gérez vos mouvements de stock
+                </p>
+              </div>
+              <div className="flex space-x-2">
+                <Dialog open={isTransferOpen} onOpenChange={setIsTransferOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline">
+                      <ArrowRightLeft className="h-4 w-4 mr-2" />
+                      Transfert
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-md">
+                    <DialogHeader>
+                      <DialogTitle>Transfert entre entrepôts</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <div>
+                        <Label htmlFor="trf-product">Produit</Label>
+                        <Select
+                          value={transfer.product}
+                          onValueChange={(value) =>
+                            setTransfer({ ...transfer, product: value })
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Sélectionner un produit" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {products.map((product) => (
+                              <SelectItem
+                                key={product.id}
+                                value={product.id.toString()}
+                              >
+                                {product.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
 
-                    <div>
-                      <Label htmlFor="trf-quantity">
-                        Quantité à transférer
-                      </Label>
-                      <Input
-                        id="trf-quantity"
-                        type="number"
-                        value={transfer.quantity}
-                        onChange={(e) =>
-                          setTransfer({ ...transfer, quantity: e.target.value })
-                        }
-                        placeholder="Quantité"
-                      />
-                    </div>
+                      <div>
+                        <Label htmlFor="trf-quantity">
+                          Quantité à transférer
+                        </Label>
+                        <Input
+                          id="trf-quantity"
+                          type="number"
+                          value={transfer.quantity}
+                          onChange={(e) =>
+                            setTransfer({
+                              ...transfer,
+                              quantity: e.target.value,
+                            })
+                          }
+                          placeholder="Quantité"
+                        />
+                      </div>
 
-                    <div>
-                      <Label htmlFor="trf-from">Entrepôt source</Label>
-                      <Select
-                        value={transfer.warehouseFrom}
-                        onValueChange={(value) =>
-                          setTransfer({ ...transfer, warehouseFrom: value })
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Depuis quel entrepôt ?" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {warehouses.map((warehouse) => (
-                            <SelectItem key={warehouse.id} value={warehouse.id}>
-                              {warehouse.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div>
-                      <Label htmlFor="trf-to">Entrepôt destination</Label>
-                      <Select
-                        value={transfer.warehouseTo}
-                        onValueChange={(value) =>
-                          setTransfer({ ...transfer, warehouseTo: value })
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Vers quel entrepôt ?" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {warehouses
-                            .filter((w) => w.id !== transfer.warehouseFrom)
-                            .map((warehouse) => (
+                      <div>
+                        <Label htmlFor="trf-from">Entrepôt source</Label>
+                        <Select
+                          value={transfer.warehouseFrom}
+                          onValueChange={(value) =>
+                            setTransfer({ ...transfer, warehouseFrom: value })
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Depuis quel entrepôt ?" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {warehouses.map((warehouse) => (
                               <SelectItem
                                 key={warehouse.id}
                                 value={warehouse.id}
@@ -596,732 +593,784 @@ export default function StocksPage() {
                                 {warehouse.name}
                               </SelectItem>
                             ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                          </SelectContent>
+                        </Select>
+                      </div>
 
-                    <div>
-                      <Label htmlFor="trf-reference">
-                        Référence (optionnel)
-                      </Label>
-                      <Input
-                        id="trf-reference"
-                        value={transfer.reference}
-                        onChange={(e) =>
-                          setTransfer({
-                            ...transfer,
-                            reference: e.target.value,
-                          })
-                        }
-                        placeholder="TRF-001..."
-                      />
-                    </div>
-
-                    <div>
-                      <Label htmlFor="trf-reason">Motif du transfert</Label>
-                      <Textarea
-                        id="trf-reason"
-                        value={transfer.reason}
-                        onChange={(e) =>
-                          setTransfer({ ...transfer, reason: e.target.value })
-                        }
-                        placeholder="Réapprovisionnement, réorganisation..."
-                      />
-                    </div>
-
-                    <div className="flex justify-end space-x-2 pt-4 border-t">
-                      <Button
-                        variant="outline"
-                        onClick={() => setIsTransferOpen(false)}
-                      >
-                        Annuler
-                      </Button>
-                      <Button
-                        onClick={handleTransfer}
-                        className="bg-purple-600 hover:bg-purple-700"
-                        disabled={
-                          !transfer.product ||
-                          !transfer.quantity ||
-                          !transfer.warehouseFrom ||
-                          !transfer.warehouseTo
-                        }
-                      >
-                        <ArrowRightLeft className="h-4 w-4 mr-2" />
-                        Effectuer le transfert
-                      </Button>
-                    </div>
-                  </div>
-                </DialogContent>
-              </Dialog>
-
-              <Dialog
-                open={isAdjustmentOpen}
-                onOpenChange={setIsAdjustmentOpen}
-              >
-                <DialogTrigger asChild>
-                  <Button variant="outline">
-                    <ArrowUpDown className="h-4 w-4 mr-2" />
-                    Ajustement
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-md">
-                  <DialogHeader>
-                    <DialogTitle>Ajustement de stock</DialogTitle>
-                  </DialogHeader>
-                  <div className="space-y-4">
-                    <div>
-                      <Label htmlFor="adj-product">Produit</Label>
-                      <Select
-                        value={adjustment.product}
-                        onValueChange={(value) => {
-                          const product = products.find(
-                            (p) => p.id === Number.parseInt(value)
-                          );
-                          setAdjustment({
-                            ...adjustment,
-                            product: value,
-                            currentStock: product
-                              ? product.stock.toString()
-                              : "",
-                          });
-                        }}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Sélectionner un produit" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {products.map((product) => (
-                            <SelectItem
-                              key={product.id}
-                              value={product.id.toString()}
-                            >
-                              {product.name} (Stock: {product.stock})
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div>
-                      <Label htmlFor="adj-warehouse">Entrepôt</Label>
-                      <Select
-                        value={adjustment.warehouse}
-                        onValueChange={(value) =>
-                          setAdjustment({ ...adjustment, warehouse: value })
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Sélectionner un entrepôt" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {warehouses.map((warehouse) => (
-                            <SelectItem key={warehouse.id} value={warehouse.id}>
-                              {warehouse.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <Label htmlFor="current-stock">Stock théorique</Label>
+                        <Label htmlFor="trf-to">Entrepôt destination</Label>
+                        <Select
+                          value={transfer.warehouseTo}
+                          onValueChange={(value) =>
+                            setTransfer({ ...transfer, warehouseTo: value })
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Vers quel entrepôt ?" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {warehouses
+                              .filter((w) => w.id !== transfer.warehouseFrom)
+                              .map((warehouse) => (
+                                <SelectItem
+                                  key={warehouse.id}
+                                  value={warehouse.id}
+                                >
+                                  {warehouse.name}
+                                </SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div>
+                        <Label htmlFor="trf-reference">
+                          Référence (optionnel)
+                        </Label>
                         <Input
-                          id="current-stock"
-                          type="number"
-                          value={adjustment.currentStock}
-                          readOnly
-                          className="bg-gray-50"
+                          id="trf-reference"
+                          value={transfer.reference}
+                          onChange={(e) =>
+                            setTransfer({
+                              ...transfer,
+                              reference: e.target.value,
+                            })
+                          }
+                          placeholder="TRF-001..."
                         />
                       </div>
+
                       <div>
-                        <Label htmlFor="real-stock">Stock réel</Label>
-                        <Input
-                          id="real-stock"
-                          type="number"
-                          value={adjustment.realStock}
+                        <Label htmlFor="trf-reason">Motif du transfert</Label>
+                        <Textarea
+                          id="trf-reason"
+                          value={transfer.reason}
+                          onChange={(e) =>
+                            setTransfer({ ...transfer, reason: e.target.value })
+                          }
+                          placeholder="Réapprovisionnement, réorganisation..."
+                        />
+                      </div>
+
+                      <div className="flex justify-end space-x-2 pt-4 border-t">
+                        <Button
+                          variant="outline"
+                          onClick={() => setIsTransferOpen(false)}
+                        >
+                          Annuler
+                        </Button>
+                        <Button
+                          onClick={handleTransfer}
+                          className="bg-purple-600 hover:bg-purple-700"
+                          disabled={
+                            !transfer.product ||
+                            !transfer.quantity ||
+                            !transfer.warehouseFrom ||
+                            !transfer.warehouseTo
+                          }
+                        >
+                          <ArrowRightLeft className="h-4 w-4 mr-2" />
+                          Effectuer le transfert
+                        </Button>
+                      </div>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+
+                <Dialog
+                  open={isAdjustmentOpen}
+                  onOpenChange={setIsAdjustmentOpen}
+                >
+                  <DialogTrigger asChild>
+                    <Button variant="outline">
+                      <ArrowUpDown className="h-4 w-4 mr-2" />
+                      Ajustement
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-md">
+                    <DialogHeader>
+                      <DialogTitle>Ajustement de stock</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <div>
+                        <Label htmlFor="adj-product">Produit</Label>
+                        <Select
+                          value={adjustment.product}
+                          onValueChange={(value) => {
+                            const product = products.find(
+                              (p) => p.id === Number.parseInt(value)
+                            );
+                            setAdjustment({
+                              ...adjustment,
+                              product: value,
+                              currentStock: product
+                                ? product.stock.toString()
+                                : "",
+                            });
+                          }}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Sélectionner un produit" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {products.map((product) => (
+                              <SelectItem
+                                key={product.id}
+                                value={product.id.toString()}
+                              >
+                                {product.name} (Stock: {product.stock})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div>
+                        <Label htmlFor="adj-warehouse">Entrepôt</Label>
+                        <Select
+                          value={adjustment.warehouse}
+                          onValueChange={(value) =>
+                            setAdjustment({ ...adjustment, warehouse: value })
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Sélectionner un entrepôt" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {warehouses.map((warehouse) => (
+                              <SelectItem
+                                key={warehouse.id}
+                                value={warehouse.id}
+                              >
+                                {warehouse.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="current-stock">Stock théorique</Label>
+                          <Input
+                            id="current-stock"
+                            type="number"
+                            value={adjustment.currentStock}
+                            readOnly
+                            className="bg-gray-50"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="real-stock">Stock réel</Label>
+                          <Input
+                            id="real-stock"
+                            type="number"
+                            value={adjustment.realStock}
+                            onChange={(e) =>
+                              setAdjustment({
+                                ...adjustment,
+                                realStock: e.target.value,
+                              })
+                            }
+                            placeholder="Stock compté"
+                          />
+                        </div>
+                      </div>
+
+                      {adjustment.currentStock && adjustment.realStock && (
+                        <div className="p-3 bg-blue-50 rounded-lg">
+                          <p className="text-sm text-blue-800">
+                            <strong>Différence :</strong>{" "}
+                            {Number.parseInt(adjustment.realStock) -
+                              Number.parseInt(adjustment.currentStock) >
+                            0
+                              ? "+"
+                              : ""}
+                            {Number.parseInt(adjustment.realStock) -
+                              Number.parseInt(adjustment.currentStock)}
+                          </p>
+                        </div>
+                      )}
+
+                      <div>
+                        <Label htmlFor="adj-reason">Motif</Label>
+                        <Textarea
+                          id="adj-reason"
+                          value={adjustment.reason}
                           onChange={(e) =>
                             setAdjustment({
                               ...adjustment,
-                              realStock: e.target.value,
+                              reason: e.target.value,
                             })
                           }
-                          placeholder="Stock compté"
+                          placeholder="Motif de l'ajustement..."
                         />
                       </div>
-                    </div>
 
-                    {adjustment.currentStock && adjustment.realStock && (
-                      <div className="p-3 bg-blue-50 rounded-lg">
-                        <p className="text-sm text-blue-800">
-                          <strong>Différence :</strong>{" "}
-                          {Number.parseInt(adjustment.realStock) -
-                            Number.parseInt(adjustment.currentStock) >
-                          0
-                            ? "+"
-                            : ""}
-                          {Number.parseInt(adjustment.realStock) -
-                            Number.parseInt(adjustment.currentStock)}
-                        </p>
+                      <div className="flex justify-end space-x-2 pt-4 border-t">
+                        <Button
+                          variant="outline"
+                          onClick={() => setIsAdjustmentOpen(false)}
+                        >
+                          Annuler
+                        </Button>
+                        <Button
+                          onClick={handleAdjustment}
+                          className="bg-blue-600 hover:bg-blue-700"
+                          disabled={
+                            !adjustment.product ||
+                            !adjustment.warehouse ||
+                            !adjustment.realStock
+                          }
+                        >
+                          <ArrowUpDown className="h-4 w-4 mr-2" />
+                          Effectuer l'ajustement
+                        </Button>
                       </div>
-                    )}
-
-                    <div>
-                      <Label htmlFor="adj-reason">Motif</Label>
-                      <Textarea
-                        id="adj-reason"
-                        value={adjustment.reason}
-                        onChange={(e) =>
-                          setAdjustment({
-                            ...adjustment,
-                            reason: e.target.value,
-                          })
-                        }
-                        placeholder="Motif de l'ajustement..."
-                      />
                     </div>
+                  </DialogContent>
+                </Dialog>
 
-                    <div className="flex justify-end space-x-2 pt-4 border-t">
-                      <Button
-                        variant="outline"
-                        onClick={() => setIsAdjustmentOpen(false)}
-                      >
-                        Annuler
-                      </Button>
-                      <Button
-                        onClick={handleAdjustment}
-                        className="bg-blue-600 hover:bg-blue-700"
-                        disabled={
-                          !adjustment.product ||
-                          !adjustment.warehouse ||
-                          !adjustment.realStock
-                        }
-                      >
-                        <ArrowUpDown className="h-4 w-4 mr-2" />
-                        Effectuer l'ajustement
-                      </Button>
-                    </div>
-                  </div>
-                </DialogContent>
-              </Dialog>
-
-              <Dialog
-                open={isNewMovementOpen}
-                onOpenChange={setIsNewMovementOpen}
-              >
-                <DialogTrigger asChild>
-                  <Button className="bg-blue-600 hover:bg-blue-700">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Nouveau mouvement
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-md">
-                  <DialogHeader>
-                    <DialogTitle>Nouveau mouvement de stock</DialogTitle>
-                  </DialogHeader>
-                  <div className="space-y-4">
-                    <div>
-                      <Label htmlFor="mov-product">Produit</Label>
-                      <Select
-                        value={newMovement.product}
-                        onValueChange={(value) =>
-                          setNewMovement({ ...newMovement, product: value })
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Sélectionner un produit" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {products.map((product) => (
-                            <SelectItem
-                              key={product.id}
-                              value={product.id.toString()}
-                            >
-                              {product.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div>
-                      <Label htmlFor="mov-type">Type de mouvement</Label>
-                      <Select
-                        value={newMovement.type}
-                        onValueChange={(value) =>
-                          setNewMovement({ ...newMovement, type: value })
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="entry">Entrée</SelectItem>
-                          <SelectItem value="exit">Sortie</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div>
-                      <Label htmlFor="mov-quantity">Quantité</Label>
-                      <Input
-                        id="mov-quantity"
-                        type="number"
-                        value={newMovement.quantity}
-                        onChange={(e) =>
-                          setNewMovement({
-                            ...newMovement,
-                            quantity: e.target.value,
-                          })
-                        }
-                        placeholder="Quantité"
-                      />
-                    </div>
-
-                    <div>
-                      <Label htmlFor="mov-warehouse">Entrepôt</Label>
-                      <Select
-                        value={newMovement.warehouse}
-                        onValueChange={(value) =>
-                          setNewMovement({ ...newMovement, warehouse: value })
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Sélectionner un entrepôt" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {warehouses.map((warehouse) => (
-                            <SelectItem key={warehouse.id} value={warehouse.id}>
-                              {warehouse.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div>
-                      <Label htmlFor="mov-reference">
-                        Référence (optionnel)
-                      </Label>
-                      <Input
-                        id="mov-reference"
-                        value={newMovement.reference}
-                        onChange={(e) =>
-                          setNewMovement({
-                            ...newMovement,
-                            reference: e.target.value,
-                          })
-                        }
-                        placeholder="BON-001, CMD-123..."
-                      />
-                    </div>
-
-                    <div>
-                      <Label htmlFor="mov-reason">Motif</Label>
-                      <Textarea
-                        id="mov-reason"
-                        value={newMovement.reason}
-                        onChange={(e) =>
-                          setNewMovement({
-                            ...newMovement,
-                            reason: e.target.value,
-                          })
-                        }
-                        placeholder="Motif du mouvement..."
-                      />
-                    </div>
-
-                    <div className="flex justify-end space-x-2 pt-4 border-t">
-                      <Button
-                        variant="outline"
-                        onClick={() => setIsNewMovementOpen(false)}
-                      >
-                        Annuler
-                      </Button>
-                      <Button
-                        onClick={handleAddMovement}
-                        className="bg-green-600 hover:bg-green-700"
-                        disabled={
-                          !newMovement.product ||
-                          !newMovement.quantity ||
-                          !newMovement.warehouse
-                        }
-                      >
-                        <Package className="h-4 w-4 mr-2" />
-                        Enregistrer le mouvement
-                      </Button>
-                    </div>
-                  </div>
-                </DialogContent>
-              </Dialog>
-            </div>
-          </div>
-        </header>
-
-        {/* Main Content */}
-        <main className="flex-1 p-6">
-          {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-6">
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">
-                      Total produits
-                    </p>
-                    <p className="text-2xl font-bold">{products.length}</p>
-                  </div>
-                  <Warehouse className="h-8 w-8 text-blue-600" />
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">Entrées</p>
-                    <p className="text-2xl font-bold">
-                      {movements.filter((m) => m.type === "entry").length}
-                    </p>
-                  </div>
-                  <TrendingUp className="h-8 w-8 text-green-600" />
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">Sorties</p>
-                    <p className="text-2xl font-bold">
-                      {movements.filter((m) => m.type === "exit").length}
-                    </p>
-                  </div>
-                  <TrendingDown className="h-8 w-8 text-red-600" />
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">
-                      Transferts
-                    </p>
-                    <p className="text-2xl font-bold">
-                      {movements.filter((m) => m.type === "transfer").length}
-                    </p>
-                  </div>
-                  <ArrowRightLeft className="h-8 w-8 text-purple-600" />
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">
-                      Ajustements
-                    </p>
-                    <p className="text-2xl font-bold">
-                      {movements.filter((m) => m.type === "adjustment").length}
-                    </p>
-                  </div>
-                  <div className="h-8 w-8 bg-blue-100 rounded-full flex items-center justify-center">
-                    <div className="h-4 w-4 bg-blue-600 rounded-full"></div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Filters */}
-          <Card className="mb-6">
-            <CardContent className="p-6">
-              <div className="flex flex-col md:flex-row gap-4">
-                <div className="flex-1">
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                    <Input
-                      placeholder="Rechercher un mouvement..."
-                      className="pl-10"
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                    />
-                  </div>
-                </div>
-                <Select
-                  value={selectedWarehouse}
-                  onValueChange={setSelectedWarehouse}
+                <Dialog
+                  open={isNewMovementOpen}
+                  onOpenChange={setIsNewMovementOpen}
                 >
-                  <SelectTrigger className="w-48">
-                    <SelectValue placeholder="Entrepôt" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Tous les entrepôts</SelectItem>
-                    {warehouses.map((warehouse) => (
-                      <SelectItem key={warehouse.id} value={warehouse.name}>
-                        {warehouse.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Button
-                  variant="outline"
-                  onClick={() => setShowFilters(!showFilters)}
-                  className={showFilters ? "bg-blue-50 border-blue-200" : ""}
-                >
-                  <Filter className="h-4 w-4 mr-2" />
-                  Filtres
-                </Button>
+                  <DialogTrigger asChild>
+                    <Button className="bg-blue-600 hover:bg-blue-700">
+                      <Plus className="h-4 w-4 mr-2" />
+                      Nouveau mouvement
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-md">
+                    <DialogHeader>
+                      <DialogTitle>Nouveau mouvement de stock</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <div>
+                        <Label htmlFor="mov-product">Produit</Label>
+                        <Select
+                          value={newMovement.product}
+                          onValueChange={(value) =>
+                            setNewMovement({ ...newMovement, product: value })
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Sélectionner un produit" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {products.map((product) => (
+                              <SelectItem
+                                key={product.id}
+                                value={product.id.toString()}
+                              >
+                                {product.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div>
+                        <Label htmlFor="mov-type">Type de mouvement</Label>
+                        <Select
+                          value={newMovement.type}
+                          onValueChange={(value) =>
+                            setNewMovement({ ...newMovement, type: value })
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="entry">Entrée</SelectItem>
+                            <SelectItem value="exit">Sortie</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div>
+                        <Label htmlFor="mov-quantity">Quantité</Label>
+                        <Input
+                          id="mov-quantity"
+                          type="number"
+                          value={newMovement.quantity}
+                          onChange={(e) =>
+                            setNewMovement({
+                              ...newMovement,
+                              quantity: e.target.value,
+                            })
+                          }
+                          placeholder="Quantité"
+                        />
+                      </div>
+
+                      <div>
+                        <Label htmlFor="mov-warehouse">Entrepôt</Label>
+                        <Select
+                          value={newMovement.warehouse}
+                          onValueChange={(value) =>
+                            setNewMovement({ ...newMovement, warehouse: value })
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Sélectionner un entrepôt" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {warehouses.map((warehouse) => (
+                              <SelectItem
+                                key={warehouse.id}
+                                value={warehouse.id}
+                              >
+                                {warehouse.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div>
+                        <Label htmlFor="mov-reference">
+                          Référence (optionnel)
+                        </Label>
+                        <Input
+                          id="mov-reference"
+                          value={newMovement.reference}
+                          onChange={(e) =>
+                            setNewMovement({
+                              ...newMovement,
+                              reference: e.target.value,
+                            })
+                          }
+                          placeholder="BON-001, CMD-123..."
+                        />
+                      </div>
+
+                      <div>
+                        <Label htmlFor="mov-reason">Motif</Label>
+                        <Textarea
+                          id="mov-reason"
+                          value={newMovement.reason}
+                          onChange={(e) =>
+                            setNewMovement({
+                              ...newMovement,
+                              reason: e.target.value,
+                            })
+                          }
+                          placeholder="Motif du mouvement..."
+                        />
+                      </div>
+
+                      <div className="flex justify-end space-x-2 pt-4 border-t">
+                        <Button
+                          variant="outline"
+                          onClick={() => setIsNewMovementOpen(false)}
+                        >
+                          Annuler
+                        </Button>
+                        <Button
+                          onClick={handleAddMovement}
+                          className="bg-green-600 hover:bg-green-700"
+                          disabled={
+                            !newMovement.product ||
+                            !newMovement.quantity ||
+                            !newMovement.warehouse
+                          }
+                        >
+                          <Package className="h-4 w-4 mr-2" />
+                          Enregistrer le mouvement
+                        </Button>
+                      </div>
+                    </div>
+                  </DialogContent>
+                </Dialog>
               </div>
+            </div>
+          </header>
 
-              {showFilters && (
-                <div className="mt-4 pt-4 border-t flex gap-4">
-                  <Select value={selectedType} onValueChange={setSelectedType}>
+          {/* Main Content */}
+          <main className="flex-1 p-6">
+            {/* Stats Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-6">
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600 dark:text-gray-300">
+                        Total produits
+                      </p>
+                      <p className="text-2xl font-bold">{products.length}</p>
+                    </div>
+                    <Warehouse className="h-8 w-8 text-blue-600" />
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600 dark:text-gray-300">
+                        Entrées
+                      </p>
+                      <p className="text-2xl font-bold">
+                        {movements.filter((m) => m.type === "entry").length}
+                      </p>
+                    </div>
+                    <TrendingUp className="h-8 w-8 text-green-600" />
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600 dark:text-gray-300">
+                        Sorties
+                      </p>
+                      <p className="text-2xl font-bold">
+                        {movements.filter((m) => m.type === "exit").length}
+                      </p>
+                    </div>
+                    <TrendingDown className="h-8 w-8 text-red-600" />
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600 dark:text-gray-300">
+                        Transferts
+                      </p>
+                      <p className="text-2xl font-bold">
+                        {movements.filter((m) => m.type === "transfer").length}
+                      </p>
+                    </div>
+                    <ArrowRightLeft className="h-8 w-8 text-purple-600" />
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600 dark:text-gray-300">
+                        Ajustements
+                      </p>
+                      <p className="text-2xl font-bold">
+                        {
+                          movements.filter((m) => m.type === "adjustment")
+                            .length
+                        }
+                      </p>
+                    </div>
+                    <div className="h-8 w-8 bg-blue-100 rounded-full flex items-center justify-center">
+                      <div className="h-4 w-4 bg-blue-600 rounded-full"></div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Filters */}
+            <Card className="mb-6">
+              <CardContent className="p-6">
+                <div className="flex flex-col md:flex-row gap-4">
+                  <div className="flex-1">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4 dark:text-gray-200" />
+                      <Input
+                        placeholder="Rechercher un mouvement..."
+                        className="pl-10"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <Select
+                    value={selectedWarehouse}
+                    onValueChange={setSelectedWarehouse}
+                  >
                     <SelectTrigger className="w-48">
-                      <SelectValue placeholder="Type de mouvement" />
+                      <SelectValue placeholder="Entrepôt" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">Tous les types</SelectItem>
-                      <SelectItem value="entry">Entrées</SelectItem>
-                      <SelectItem value="exit">Sorties</SelectItem>
-                      <SelectItem value="transfer">Transferts</SelectItem>
-                      <SelectItem value="adjustment">Ajustements</SelectItem>
+                      <SelectItem value="all">Tous les entrepôts</SelectItem>
+                      {warehouses.map((warehouse) => (
+                        <SelectItem key={warehouse.id} value={warehouse.name}>
+                          {warehouse.name}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                   <Button
                     variant="outline"
-                    onClick={() => {
-                      setSelectedWarehouse("all");
-                      setSelectedType("all");
-                      setSearchTerm("");
-                    }}
+                    onClick={() => setShowFilters(!showFilters)}
+                    className={showFilters ? "bg-blue-50 border-blue-200" : ""}
                   >
-                    <X className="h-4 w-4 mr-2" />
-                    Réinitialiser
+                    <Filter className="h-4 w-4 mr-2" />
+                    Filtres
                   </Button>
                 </div>
-              )}
-            </CardContent>
-          </Card>
 
-          {/* Stock Movements Table */}
-          <Card>
-            <CardHeader>
-              <CardTitle>
-                Mouvements de stock ({filteredMovements.length})
-                {totalPages > 1 && ` - Page ${currentPage}/${totalPages}`}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Produit</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Quantité</TableHead>
-                    <TableHead>Entrepôt(s)</TableHead>
-                    <TableHead>Utilisateur</TableHead>
-                    <TableHead>Référence</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {paginatedMovements.map((movement) => (
-                    <TableRow key={movement.id}>
-                      <TableCell>
-                        {new Date(movement.date).toLocaleDateString("fr-FR")}
-                      </TableCell>
-                      <TableCell className="font-medium">
-                        {movement.product}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center space-x-2">
-                          {getMovementIcon(movement.type)}
-                          {getMovementType(movement.type)}
-                        </div>
-                      </TableCell>
-                      <TableCell
-                        className={
-                          movement.type === "transfer"
-                            ? "text-purple-600"
-                            : movement.quantity > 0
-                            ? "text-green-600"
-                            : "text-red-600"
-                        }
-                      >
-                        {movement.type === "transfer"
-                          ? ""
-                          : movement.quantity > 0
-                          ? "+"
-                          : ""}
-                        {movement.quantity}
-                      </TableCell>
-                      <TableCell>
-                        {movement.type === "transfer" ? (
-                          <div className="text-sm">
-                            <div className="text-red-600">
-                              ← {movement.warehouseFrom}
-                            </div>
-                            <div className="text-green-600">
-                              → {movement.warehouseTo}
-                            </div>
-                          </div>
-                        ) : (
-                          movement.warehouse
-                        )}
-                      </TableCell>
-                      <TableCell>{movement.user}</TableCell>
-                      <TableCell>{movement.reference}</TableCell>
-                      <TableCell>
-                        <div className="flex space-x-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setDeletingMovement(movement)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
+                {showFilters && (
+                  <div className="mt-4 pt-4 border-t flex gap-4">
+                    <Select
+                      value={selectedType}
+                      onValueChange={setSelectedType}
+                    >
+                      <SelectTrigger className="w-48">
+                        <SelectValue placeholder="Type de mouvement" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Tous les types</SelectItem>
+                        <SelectItem value="entry">Entrées</SelectItem>
+                        <SelectItem value="exit">Sorties</SelectItem>
+                        <SelectItem value="transfer">Transferts</SelectItem>
+                        <SelectItem value="adjustment">Ajustements</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setSelectedWarehouse("all");
+                        setSelectedType("all");
+                        setSearchTerm("");
+                      }}
+                    >
+                      <X className="h-4 w-4 mr-2" />
+                      Réinitialiser
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Stock Movements Table */}
+            <Card>
+              <CardHeader>
+                <CardTitle>
+                  Mouvements de stock ({filteredMovements.length})
+                  {totalPages > 1 && ` - Page ${currentPage}/${totalPages}`}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Produit</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Quantité</TableHead>
+                      <TableHead>Entrepôt(s)</TableHead>
+                      <TableHead>Utilisateur</TableHead>
+                      <TableHead>Référence</TableHead>
+                      <TableHead>Actions</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-            {/* AJOUT: Composant de pagination */}
-            <div className="flex items-center justify-between px-6 py-4 border-t">
-              <div className="text-sm text-gray-600">
-                Affichage de {startIndex + 1} à{" "}
-                {Math.min(startIndex + itemsPerPage, filteredMovements.length)}{" "}
-                sur {filteredMovements.length} mouvements
-              </div>
-
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() =>
-                    setCurrentPage((prev) => Math.max(prev - 1, 1))
-                  }
-                  disabled={currentPage === 1}
-                >
-                  Précédent
-                </Button>
-
-                <div className="flex items-center gap-1">
-                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                    const pageNum = i + 1;
-                    return (
-                      <Button
-                        key={pageNum}
-                        variant={
-                          currentPage === pageNum ? "default" : "outline"
-                        }
-                        size="sm"
-                        onClick={() => setCurrentPage(pageNum)}
-                      >
-                        {pageNum}
-                      </Button>
-                    );
-                  })}
-                  {totalPages > 5 && (
-                    <span className="px-2 text-sm text-gray-500">...</span>
-                  )}
+                  </TableHeader>
+                  <TableBody>
+                    {paginatedMovements.map((movement) => (
+                      <TableRow key={movement.id}>
+                        <TableCell>
+                          {new Date(movement.date).toLocaleDateString("fr-FR")}
+                        </TableCell>
+                        <TableCell className="font-medium">
+                          {movement.product}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center space-x-2">
+                            {getMovementIcon(movement.type)}
+                            {getMovementType(movement.type)}
+                          </div>
+                        </TableCell>
+                        <TableCell
+                          className={
+                            movement.type === "transfer"
+                              ? "text-purple-600"
+                              : movement.quantity > 0
+                              ? "text-green-600"
+                              : "text-red-600"
+                          }
+                        >
+                          {movement.type === "transfer"
+                            ? ""
+                            : movement.quantity > 0
+                            ? "+"
+                            : ""}
+                          {movement.quantity}
+                        </TableCell>
+                        <TableCell>
+                          {movement.type === "transfer" ? (
+                            <div className="text-sm">
+                              <div className="text-red-600">
+                                ← {movement.warehouseFrom}
+                              </div>
+                              <div className="text-green-600">
+                                → {movement.warehouseTo}
+                              </div>
+                            </div>
+                          ) : (
+                            movement.warehouse
+                          )}
+                        </TableCell>
+                        <TableCell>{movement.user}</TableCell>
+                        <TableCell>{movement.reference}</TableCell>
+                        <TableCell>
+                          <div className="flex space-x-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setDeletingMovement(movement)}
+                              disabled={!isAdmin}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+              {/* AJOUT: Composant de pagination */}
+              <div className="flex items-center justify-between px-6 py-4 border-t">
+                <div className="text-sm text-gray-600 dark:text-gray-300">
+                  Affichage de {startIndex + 1} à{" "}
+                  {Math.min(
+                    startIndex + itemsPerPage,
+                    filteredMovements.length
+                  )}{" "}
+                  sur {filteredMovements.length} mouvements
                 </div>
 
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() =>
-                    setCurrentPage((prev) => Math.min(prev + 1, totalPages))
-                  }
-                  disabled={currentPage === totalPages}
-                >
-                  Suivant
-                </Button>
-              </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      setCurrentPage((prev) => Math.max(prev - 1, 1))
+                    }
+                    disabled={currentPage === 1}
+                  >
+                    Précédent
+                  </Button>
 
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-600">
-                  Mouvements par page:
-                </span>
-                <Select
-                  value={itemsPerPage.toString()}
-                  onValueChange={(value) => {
-                    setItemsPerPage(Number(value));
-                    setCurrentPage(1); // Reset à la première page
-                  }}
-                >
-                  <SelectTrigger className="w-20">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="5">5</SelectItem>
-                    <SelectItem value="10">10</SelectItem>
-                    <SelectItem value="20">20</SelectItem>
-                    <SelectItem value="50">50</SelectItem>
-                  </SelectContent>
-                </Select>
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                      const pageNum = i + 1;
+                      return (
+                        <Button
+                          key={pageNum}
+                          variant={
+                            currentPage === pageNum ? "default" : "outline"
+                          }
+                          size="sm"
+                          onClick={() => setCurrentPage(pageNum)}
+                        >
+                          {pageNum}
+                        </Button>
+                      );
+                    })}
+                    {totalPages > 5 && (
+                      <span className="px-2 text-sm text-gray-500 dark:text-gray-200">
+                        ...
+                      </span>
+                    )}
+                  </div>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+                    }
+                    disabled={currentPage === totalPages}
+                  >
+                    Suivant
+                  </Button>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-600 dark:text-gray-300">
+                    Mouvements par page:
+                  </span>
+                  <Select
+                    value={itemsPerPage.toString()}
+                    onValueChange={(value) => {
+                      setItemsPerPage(Number(value));
+                      setCurrentPage(1); // Reset à la première page
+                    }}
+                  >
+                    <SelectTrigger className="w-20">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="5">5</SelectItem>
+                      <SelectItem value="10">10</SelectItem>
+                      <SelectItem value="20">20</SelectItem>
+                      <SelectItem value="50">50</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
+            </Card>
+          </main>
+        </div>
+
+        {/* Delete Confirmation Modal */}
+        <Dialog
+          open={!!deletingMovement}
+          onOpenChange={() => setDeletingMovement(null)}
+        >
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Confirmer la suppression</DialogTitle>
+            </DialogHeader>
+            <div className="py-4">
+              <p className="text-gray-600 dark:text-gray-300">
+                Êtes-vous sûr de vouloir supprimer ce mouvement ?
+              </p>
+              {deletingMovement && (
+                <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+                  <p>
+                    <strong>Produit :</strong> {deletingMovement.product}
+                  </p>
+                  <p>
+                    <strong>Type :</strong>{" "}
+                    {deletingMovement.type === "entry"
+                      ? "Entrée"
+                      : deletingMovement.type === "exit"
+                      ? "Sortie"
+                      : deletingMovement.type === "transfer"
+                      ? "Transfert"
+                      : "Ajustement"}
+                  </p>
+                  <p>
+                    <strong>Quantité :</strong> {deletingMovement.quantity}
+                  </p>
+                  <p>
+                    <strong>Référence :</strong> {deletingMovement.reference}
+                  </p>
+                </div>
+              )}
             </div>
-          </Card>
-        </main>
+            <div className="flex justify-end space-x-2">
+              <Button
+                variant="outline"
+                onClick={() => setDeletingMovement(null)}
+              >
+                Annuler
+              </Button>
+              <Button
+                onClick={handleDeleteMovement}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Confirmer la suppression
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
-
-      {/* Delete Confirmation Modal */}
-      <Dialog
-        open={!!deletingMovement}
-        onOpenChange={() => setDeletingMovement(null)}
-      >
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Confirmer la suppression</DialogTitle>
-          </DialogHeader>
-          <div className="py-4">
-            <p className="text-gray-600">
-              Êtes-vous sûr de vouloir supprimer ce mouvement ?
-            </p>
-            {deletingMovement && (
-              <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-                <p>
-                  <strong>Produit :</strong> {deletingMovement.product}
-                </p>
-                <p>
-                  <strong>Type :</strong>{" "}
-                  {deletingMovement.type === "entry"
-                    ? "Entrée"
-                    : deletingMovement.type === "exit"
-                    ? "Sortie"
-                    : deletingMovement.type === "transfer"
-                    ? "Transfert"
-                    : "Ajustement"}
-                </p>
-                <p>
-                  <strong>Quantité :</strong> {deletingMovement.quantity}
-                </p>
-                <p>
-                  <strong>Référence :</strong> {deletingMovement.reference}
-                </p>
-              </div>
-            )}
-          </div>
-          <div className="flex justify-end space-x-2">
-            <Button variant="outline" onClick={() => setDeletingMovement(null)}>
-              Annuler
-            </Button>
-            <Button
-              onClick={handleDeleteMovement}
-              className="bg-red-600 hover:bg-red-700"
-            >
-              <Trash2 className="h-4 w-4 mr-2" />
-              Confirmer la suppression
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-    </div>
+    </RoleGuard>
   );
 }

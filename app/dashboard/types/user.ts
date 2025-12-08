@@ -2,6 +2,7 @@ export interface AppUser {
   id: number;
   name: string;
   email: string;
+  password: string;
   phone: string;
   role: string;
   warehouse: string;
@@ -12,6 +13,7 @@ export interface AppUser {
 export type NewUser = {
   name: string;
   email: string;
+  password: string;
   phone: string;
   role: string;
   warehouse: string;

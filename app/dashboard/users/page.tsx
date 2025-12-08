@@ -65,14 +65,7 @@ import {
   CollapsibleTrigger,
 } from "@/app/dashboard/components/ui/collapsible";
 import { AppUser, NewUser, EditUser } from "../types/user";
-// import { Role } from "../types/role";
-
-// const roles = [
-//   { value: "admin", label: "Administrateur", color: "bg-red-100 text-red-800" },
-//   { value: "manager", label: "Gestionnaire", color: "bg-blue-100 text-blue-800" },
-//   { value: "employee", label: "Employé", color: "bg-green-100 text-green-800" },
-//   { value: "viewer", label: "Lecteur", color: "bg-gray-100 text-gray-800" },
-// ];
+import { RoleGuard } from "../components/auth/role-guard";
 
 const warehouses = [
   { value: "main", label: "Entrepôt Principal" },
@@ -108,10 +101,12 @@ export default function UsersPage() {
   const [users, setUsers] = useState<AppUser[]>([]);
   const [roles, setRoles] = useState<Role[]>([]); // ✅ dynamique
   const [loadingRoles, setLoadingRoles] = useState(true);
+  const [open, setOpen] = useState(false);
 
   const [newUser, setNewUser] = useState<NewUser>({
     name: "",
     email: "",
+    password: "",
     phone: "",
     role: "",
     warehouse: "",
@@ -122,6 +117,7 @@ export default function UsersPage() {
   const [editUser, setEditUser] = useState<EditUser>({
     name: "",
     email: "",
+    password: "",
     phone: "",
     role: "",
     warehouse: "",
@@ -137,11 +133,13 @@ export default function UsersPage() {
 
   const { toast } = useToast();
 
-  // Charger les rôles depuis l’API
+  /* ---------- fetch roles ---------- */
   useEffect(() => {
     const fetchRoles = async () => {
       try {
-        const res = await fetch("/api/roles?userId=5", { cache: "no-store" }); // ⚠️ remplace 5 par l’ID utilisateur connecté
+        const res = await fetch("/api/roles", {
+          cache: "no-store",
+        });
         if (!res.ok) throw new Error("Erreur API rôles");
         const data: Role[] = await res.json();
         setRoles(data);
@@ -153,6 +151,8 @@ export default function UsersPage() {
     };
     fetchRoles();
   }, []);
+
+  console.log("Le roles est : ", roles);
 
   /* ---------- load users (with AbortController) ---------- */
   useEffect(() => {
@@ -276,6 +276,7 @@ export default function UsersPage() {
     const payload = {
       name: newUser.name,
       email: newUser.email,
+      password: newUser.password,
       phone: newUser.phone,
       role: newUser.role,
       warehouse: warehouseLabel,
@@ -296,11 +297,25 @@ export default function UsersPage() {
       const created: AppUser = await res.json();
 
       // functional update to avoid stale state
-      setUsers((prev) => [...prev, created]);
+      // setUsers((prev) => [...prev, created]);
+      const reloadUsers = async () => {
+        setSearchTerm(""); // important
+        try {
+          const res = await fetch("/api/users");
+          if (!res.ok)
+            throw new Error("Erreur au rechargement des utilisateurs");
+          const data: AppUser[] = await res.json();
+          setUsers(data);
+        } catch (err) {
+          console.error("Reload users error:", err);
+        }
+      };
+      await reloadUsers();
 
       setNewUser({
         name: "",
         email: "",
+        password: "",
         phone: "",
         role: "",
         warehouse: "",
@@ -325,28 +340,61 @@ export default function UsersPage() {
   }, [isCreateFormValid, newUser, toast]);
 
   /* ---------- edit user ---------- */
+  // const handleEditUser = useCallback((user: AppUser) => {
+  //   setEditingUser(user);
+  //   setEditUser({
+  //     name: user.name,
+  //     email: user.email,
+  //     password: user.password,
+  //     phone: user.phone,
+  //     role: user.role,
+  //     warehouse:
+  //       warehouses.find((w) => w.label === user.warehouse)?.value || "",
+  //     status: user.status === "active",
+  //   });
+  //   setIsEditModalOpen(true);
+  // }, []);
   const handleEditUser = useCallback((user: AppUser) => {
     setEditingUser(user);
     setEditUser({
-      name: user.name,
-      email: user.email,
-      phone: user.phone,
-      role: user.role,
+      name: user.name ?? "",
+      email: user.email ?? "",
+      phone: user.phone ?? "",
+      role: user.role ?? "",
       warehouse:
         warehouses.find((w) => w.label === user.warehouse)?.value || "",
       status: user.status === "active",
+      password: "", // ← champ éditable, vide par défaut
     });
     setIsEditModalOpen(true);
   }, []);
 
+  // const isEditFormValid = useMemo(() => {
+  //   return (
+  //     editUser.name.trim() !== "" &&
+  //     editUser.email.trim() !== "" &&
+  //     editUser.password.trim() !== "" &&
+  //     editUser.phone.trim() !== "" &&
+  //     editUser.role !== "" &&
+  //     editUser.warehouse !== "" &&
+  //     isValidEmail(editUser.email)
+  //   );
+  // }, [editUser]);
+
   const isEditFormValid = useMemo(() => {
+    const name = editUser.name ?? "";
+    const email = editUser.email ?? "";
+    const phone = editUser.phone ?? "";
+    const role = editUser.role ?? "";
+    const warehouse = editUser.warehouse ?? "";
+
     return (
-      editUser.name.trim() !== "" &&
-      editUser.email.trim() !== "" &&
-      editUser.phone.trim() !== "" &&
-      editUser.role !== "" &&
-      editUser.warehouse !== "" &&
-      isValidEmail(editUser.email)
+      name.trim() !== "" &&
+      email.trim() !== "" &&
+      phone.trim() !== "" &&
+      role !== "" &&
+      warehouse !== "" &&
+      isValidEmail(email)
     );
   }, [editUser]);
 
@@ -367,6 +415,7 @@ export default function UsersPage() {
         id: editingUser.id,
         name: editUser.name,
         email: editUser.email,
+        password: editUser.password,
         phone: editUser.phone,
         role: editUser.role,
         warehouse:
@@ -444,420 +493,576 @@ export default function UsersPage() {
     [users, toast]
   );
 
+  // Fonction pour afficher la date de la dernière connection
+  function daysDiff(date1: any, date2: any) {
+    const d1Converi = new Date(date1);
+    const d2Converi = new Date(date2);
+    const d1: any = new Date(
+      d1Converi.getFullYear(),
+      d1Converi.getMonth(),
+      d1Converi.getDate()
+    );
+    const d2: any = new Date(
+      d2Converi.getFullYear(),
+      d2Converi.getMonth(),
+      d2Converi.getDate()
+    );
+    const diff = (d1 - d2) / (1000 * 60 * 60 * 24);
+    return diff;
+  }
+  function formatDate(targetDate1: any): string | null {
+    if (!targetDate1) return null;
+    const targetDate = new Date(targetDate1);
+    const today = new Date();
+    const diff = daysDiff(targetDate, today);
+    if (diff === 0) return "Aujourd'hui";
+    if (diff === -1) return "Hier";
+    if (diff >= -6 && diff <= -2) {
+      return targetDate?.toLocaleDateString("fr-FR", { weekday: "long" });
+    }
+    return targetDate?.toLocaleDateString("fr-FR");
+  }
+
   /* ---------- JSX ---------- */
   return (
-    <div className="flex min-h-screen bg-gray-50">
-      <Sidebar />
+    <RoleGuard allowedRoles={["admin"]}>
+      <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900">
+        <Sidebar />
 
-      <div className="flex-1 flex flex-col">
-        {/* Header */}
-        <header className="bg-white border-b border-gray-200 px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">Utilisateurs</h1>
-              <p className="text-gray-600">Gérez les accès et permissions</p>
-            </div>
+        <div className="flex-1 flex flex-col">
+          {/* Header */}
+          <header className="bg-white border-b border-gray-200 px-6 py-4 dark:bg-gray-900 ">
+            <div className="flex items-center justify-between">
+              <div className="ml-10 lg:ml-0">
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-300">
+                  Utilisateurs
+                </h1>
+                <p className="text-gray-600 dark:text-gray-300">
+                  Gérez les accès et permissions
+                </p>
+              </div>
 
-            <Dialog
-              open={isCreateModalOpen}
-              onOpenChange={setIsCreateModalOpen}
-            >
-              <DialogTrigger asChild>
-                <Button className="bg-blue-600 hover:bg-blue-700">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Nouvel utilisateur
-                </Button>
-              </DialogTrigger>
+              <Dialog
+                open={isCreateModalOpen}
+                onOpenChange={setIsCreateModalOpen}
+              >
+                <DialogTrigger asChild>
+                  <Button className="bg-blue-600 hover:bg-blue-700">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Nouvel utilisateur
+                  </Button>
+                </DialogTrigger>
 
-              <DialogContent className="sm:max-w-[425px]">
-                <DialogHeader>
-                  <DialogTitle>Créer un nouvel utilisateur</DialogTitle>
-                </DialogHeader>
+                <DialogContent className="sm:max-w-[425px]">
+                  <DialogHeader>
+                    <DialogTitle>Créer un nouvel utilisateur</DialogTitle>
+                  </DialogHeader>
 
-                <div className="grid gap-4 py-4">
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="name" className="text-right">
-                      Nom *
-                    </Label>
-                    <Input
-                      id="name"
-                      value={newUser.name}
-                      onChange={(e) =>
-                        setNewUser((p) => ({ ...p, name: e.target.value }))
-                      }
-                      className="col-span-3"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="email" className="text-right">
-                      Email *
-                    </Label>
-                    <Input
-                      id="email"
-                      value={newUser.email}
-                      onChange={(e) =>
-                        setNewUser((p) => ({ ...p, email: e.target.value }))
-                      }
-                      className="col-span-3"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="phone" className="text-right">
-                      Téléphone *
-                    </Label>
-                    <Input
-                      id="phone"
-                      value={newUser.phone}
-                      onChange={(e) =>
-                        setNewUser((p) => ({ ...p, phone: e.target.value }))
-                      }
-                      className="col-span-3"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="role" className="text-right">
-                      Rôle *
-                    </Label>
-                    <Select
-                      value={newUser.role}
-                      onValueChange={(value) =>
-                        setNewUser((p) => ({ ...p, role: value }))
-                      }
-                    >
-                      <SelectTrigger className="col-span-3">
-                        <SelectValue placeholder="Sélectionner un rôle" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {roles.map((r) => (
-                          <SelectItem key={r.value} value={r.value}>
-                            {r.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="warehouse" className="text-right">
-                      Entrepôt *
-                    </Label>
-                    <Select
-                      value={newUser.warehouse}
-                      onValueChange={(value) =>
-                        setNewUser((p) => ({ ...p, warehouse: value }))
-                      }
-                    >
-                      <SelectTrigger className="col-span-3">
-                        <SelectValue placeholder="Sélectionner un entrepôt" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {warehouses.map((w) => (
-                          <SelectItem key={w.value} value={w.value}>
-                            {w.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="active" className="text-right">
-                      Actif
-                    </Label>
-                    <Switch
-                      id="active"
-                      checked={newUser.status}
-                      onCheckedChange={(checked) =>
-                        setNewUser((p) => ({ ...p, status: Boolean(checked) }))
-                      }
-                      className="col-span-3"
-                    />
-                  </div>
-
-                  <div className="flex justify-end space-x-2">
-                    <Button
-                      variant="outline"
-                      onClick={() => setIsCreateModalOpen(false)}
-                    >
-                      Annuler
-                    </Button>
-                    <Button
-                      onClick={handleCreateUser}
-                      disabled={isCreating || !isCreateFormValid}
-                      className={
-                        !isCreateFormValid
-                          ? "opacity-50 cursor-not-allowed"
-                          : ""
-                      }
-                    >
-                      {isCreating ? "Création..." : "Créer"}
-                    </Button>
-                  </div>
-                </div>
-              </DialogContent>
-            </Dialog>
-          </div>
-        </header>
-
-        {/* Main Content */}
-        <main className="flex-1 p-6">
-          {/* Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">
-                      Total utilisateurs
-                    </p>
-                    <p className="text-2xl font-bold">{stats.total}</p>
-                  </div>
-                  <User className="h-8 w-8 text-blue-600" />
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">Actifs</p>
-                    <p className="text-2xl font-bold">{stats.active}</p>
-                  </div>
-                  <div className="h-8 w-8 bg-green-100 rounded-full flex items-center justify-center">
-                    <div className="h-4 w-4 bg-green-600 rounded-full"></div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">
-                      Administrateurs
-                    </p>
-                    <p className="text-2xl font-bold">{stats.admins}</p>
-                  </div>
-                  <Shield className="h-8 w-8 text-red-600" />
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">
-                      Connectés aujourd'hui
-                    </p>
-                    <p className="text-2xl font-bold">{stats.todayConnected}</p>
-                  </div>
-                  <div className="h-8 w-8 bg-purple-100 rounded-full flex items-center justify-center">
-                    <div className="h-4 w-4 bg-purple-600 rounded-full"></div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Filters */}
-          <Card className="mb-6">
-            <CardContent className="p-6">
-              <div className="flex flex-col gap-4">
-                <div className="flex flex-col md:flex-row gap-4">
-                  <div className="flex-1">
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                  <div className="grid gap-4 py-4">
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="name" className="text-right">
+                        Nom *
+                      </Label>
                       <Input
-                        placeholder="Rechercher par nom, email ou téléphone."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="pl-10"
+                        id="name"
+                        value={newUser.name}
+                        onChange={(e) =>
+                          setNewUser((p) => ({ ...p, name: e.target.value }))
+                        }
+                        className="col-span-3"
                       />
                     </div>
-                  </div>
 
-                  <Collapsible>
-                    <CollapsibleTrigger asChild>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="email" className="text-right">
+                        Email *
+                      </Label>
+                      <Input
+                        id="email"
+                        value={newUser.email}
+                        onChange={(e) =>
+                          setNewUser((p) => ({ ...p, email: e.target.value }))
+                        }
+                        className="col-span-3"
+                      />
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="password" className="text-right">
+                        Mot de passe *
+                      </Label>
+                      <Input
+                        id="password"
+                        type="password"
+                        value={newUser.password}
+                        onChange={(e) =>
+                          setNewUser((p) => ({
+                            ...p,
+                            password: e.target.value,
+                          }))
+                        }
+                        className="col-span-3"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="phone" className="text-right">
+                        Téléphone *
+                      </Label>
+                      <Input
+                        id="phone"
+                        value={newUser.phone}
+                        onChange={(e) =>
+                          setNewUser((p) => ({ ...p, phone: e.target.value }))
+                        }
+                        className="col-span-3"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="role" className="text-right">
+                        Rôle *
+                      </Label>
+                      <Select
+                        value={newUser.role}
+                        onValueChange={(value) =>
+                          setNewUser((p) => ({ ...p, role: value }))
+                        }
+                      >
+                        <SelectTrigger className="col-span-3">
+                          <SelectValue placeholder="Sélectionner un rôle" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {roles.map((r) => (
+                            <SelectItem key={r.value} value={r.value}>
+                              {r.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="warehouse" className="text-right">
+                        Entrepôt *
+                      </Label>
+                      <Select
+                        value={newUser.warehouse}
+                        onValueChange={(value) =>
+                          setNewUser((p) => ({ ...p, warehouse: value }))
+                        }
+                      >
+                        <SelectTrigger className="col-span-3">
+                          <SelectValue placeholder="Sélectionner un entrepôt" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {warehouses.map((w) => (
+                            <SelectItem key={w.value} value={w.value}>
+                              {w.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="active" className="text-right">
+                        Actif
+                      </Label>
+                      <Switch
+                        id="active"
+                        checked={newUser.status}
+                        onCheckedChange={(checked) =>
+                          setNewUser((p) => ({
+                            ...p,
+                            status: Boolean(checked),
+                          }))
+                        }
+                        className="col-span-3"
+                      />
+                    </div>
+
+                    <div className="flex justify-end space-x-2">
                       <Button
                         variant="outline"
-                        className="relative bg-transparent"
+                        onClick={() => setIsCreateModalOpen(false)}
                       >
-                        <Filter className="h-4 w-4 mr-2" />
-                        Filtres
-                        {activeFiltersCount > 0 && (
-                          <Badge className="ml-2 bg-blue-600 text-white text-xs px-1.5 py-0.5">
-                            {activeFiltersCount}
-                          </Badge>
-                        )}
+                        Annuler
                       </Button>
-                    </CollapsibleTrigger>
-                    <CollapsibleContent className="mt-4">
-                      <div className="flex flex-col md:flex-row gap-4 p-4 bg-gray-50 rounded">
-                        <div className="flex-1">
-                          <Label>Rôle</Label>
-                          <Select
-                            value={roleFilter}
-                            onValueChange={(v) => setRoleFilter(v)}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Tous" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="all">Tous</SelectItem>
-                              {roles.map((r) => (
-                                <SelectItem key={r.value} value={r.value}>
-                                  {r.label}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
+                      <Button
+                        onClick={handleCreateUser}
+                        disabled={isCreating || !isCreateFormValid}
+                        className={
+                          !isCreateFormValid
+                            ? "opacity-50 cursor-not-allowed"
+                            : ""
+                        }
+                      >
+                        {isCreating ? "Création..." : "Créer"}
+                      </Button>
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            </div>
+          </header>
 
-                        <div className="flex-1">
-                          <Label>Statut</Label>
-                          <Select
-                            value={statusFilter}
-                            onValueChange={(v) => setStatusFilter(v)}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Tous" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="all">Tous</SelectItem>
-                              <SelectItem value="active">Actif</SelectItem>
-                              <SelectItem value="inactive">Inactif</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
+          {/* Main Content */}
+          <main className="flex-1 p-6">
+            {/* Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600 dark:text-gray-300">
+                        Total utilisateurs
+                      </p>
+                      <p className="text-2xl font-bold">{stats.total}</p>
+                    </div>
+                    <User className="h-8 w-8 text-blue-600" />
+                  </div>
+                </CardContent>
+              </Card>
 
-                        <div className="flex items-end">
-                          <Button variant="outline" onClick={resetFilters}>
-                            <X className="h-4 w-4 mr-2" />
-                            Réinitialiser
-                          </Button>
-                        </div>
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600 dark:text-gray-300">
+                        Actifs
+                      </p>
+                      <p className="text-2xl font-bold">{stats.active}</p>
+                    </div>
+                    <div className="h-8 w-8 bg-green-100 rounded-full flex items-center justify-center">
+                      <div className="h-4 w-4 bg-green-600 rounded-full"></div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600 dark:text-gray-300">
+                        Administrateurs
+                      </p>
+                      <p className="text-2xl font-bold">{stats.admins}</p>
+                    </div>
+                    <Shield className="h-8 w-8 text-red-600" />
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600 dark:text-gray-300">
+                        Connectés aujourd'hui
+                      </p>
+                      <p className="text-2xl font-bold">
+                        {stats.todayConnected}
+                      </p>
+                    </div>
+                    <div className="h-8 w-8 bg-purple-100 rounded-full flex items-center justify-center">
+                      <div className="h-4 w-4 bg-purple-600 rounded-full"></div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Filters */}
+            <Card className="mb-6">
+              <CardContent className="p-6">
+                <div className="flex flex-col gap-4">
+                  <div className="flex flex-col md:flex-row gap-4">
+                    <div className="flex-1">
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4 dark:text-gray-200" />
+                        <Input
+                          placeholder="Rechercher par nom, email ou téléphone."
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                          className="pl-10"
+                        />
                       </div>
-                    </CollapsibleContent>
-                  </Collapsible>
-                </div>
+                    </div>
 
-                <div className="text-sm text-gray-600">
-                  {filteredUsers.length} utilisateur
-                  {filteredUsers.length > 1 ? "s" : ""} trouvé
-                  {filteredUsers.length > 1 ? "s" : ""}
-                  {activeFiltersCount > 0 &&
-                    ` (${activeFiltersCount} filtre${
-                      activeFiltersCount > 1 ? "s" : ""
-                    } actif${activeFiltersCount > 1 ? "s" : ""})`}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+                    <Collapsible open={open} onOpenChange={setOpen}>
+                      <CollapsibleTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className="relative bg-transparent"
+                        >
+                          <Filter className="h-4 w-4 mr-2" />
+                          Filtres
+                          {activeFiltersCount > 0 && (
+                            <Badge className="ml-2 bg-blue-600 text-white text-xs px-1.5 py-0.5">
+                              {activeFiltersCount}
+                            </Badge>
+                          )}
+                        </Button>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent className="mt-4">
+                        <div className="flex flex-col md:flex-row gap-4 p-4 bg-gray-50 rounded">
+                          <div className="flex-1">
+                            <Label>Rôle</Label>
+                            <Select
+                              value={roleFilter}
+                              onValueChange={(v) => setRoleFilter(v)}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Tous" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="all">Tous</SelectItem>
+                                {roles.map((r) => (
+                                  <SelectItem key={r.value} value={r.value}>
+                                    {r.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
 
-          {/* Users Table */}
-          {/* Users Table (responsive) */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Liste des utilisateurs</CardTitle>
-            </CardHeader>
+                          <div className="flex-1">
+                            <Label>Statut</Label>
+                            <Select
+                              value={statusFilter}
+                              onValueChange={(v) => setStatusFilter(v)}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Tous" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="all">Tous</SelectItem>
+                                <SelectItem value="active">Actif</SelectItem>
+                                <SelectItem value="inactive">
+                                  Inactif
+                                </SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
 
-            <CardContent>
-              {isLoading ? (
-                <div className="text-center py-8">Chargement...</div>
-              ) : fetchError ? (
-                <div className="text-center py-8 text-red-600">
-                  Erreur: {fetchError}
+                          <div className="flex items-end">
+                            <Button
+                              variant="outline"
+                              onClick={() => {
+                                resetFilters();
+                                setOpen(false);
+                              }}
+                            >
+                              <X className="h-4 w-4 mr-2" />
+                              Réinitialiser
+                            </Button>
+                          </div>
+                        </div>
+                      </CollapsibleContent>
+                    </Collapsible>
+                  </div>
+
+                  <div className="text-sm text-gray-600 dark:text-gray-300">
+                    {filteredUsers.length} utilisateur
+                    {filteredUsers.length > 1 ? "s" : ""} trouvé
+                    {filteredUsers.length > 1 ? "s" : ""}
+                    {activeFiltersCount > 0 &&
+                      ` (${activeFiltersCount} filtre${
+                        activeFiltersCount > 1 ? "s" : ""
+                      } actif${activeFiltersCount > 1 ? "s" : ""})`}
+                  </div>
                 </div>
-              ) : filteredUsers.length === 0 ? (
-                <div className="text-center py-8">
-                  <User className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-500">Aucun utilisateur trouvé</p>
-                  {activeFiltersCount > 0 && (
-                    <Button
-                      variant="outline"
-                      onClick={resetFilters}
-                      className="mt-2 bg-transparent"
-                    >
-                      Réinitialiser les filtres
-                    </Button>
-                  )}
-                </div>
-              ) : (
-                <>
-                  {/* Table for medium+ screens */}
-                  <div className="hidden md:block overflow-x-auto">
-                    <Table className="min-w-[900px]">
-                      {" "}
-                      {/* min-w to keep columns readable */}
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Utilisateur</TableHead>
-                          <TableHead>Email</TableHead>
-                          <TableHead className="hidden lg:table-cell">
-                            Téléphone
-                          </TableHead>
-                          <TableHead>Rôle</TableHead>
-                          <TableHead className="hidden lg:table-cell">
-                            Entrepôt
-                          </TableHead>
-                          <TableHead className="hidden sm:table-cell">
-                            Statut
-                          </TableHead>
-                          <TableHead className="hidden xl:table-cell">
-                            Dernière connexion
-                          </TableHead>
-                          <TableHead>Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {filteredUsers.map((user) => (
-                          <TableRow key={user.id}>
-                            <TableCell>
-                              <div className="flex items-center space-x-3">
-                                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                                  <User className="h-4 w-4 text-blue-600" />
+              </CardContent>
+            </Card>
+
+            {/* Users Table */}
+            {/* Users Table (responsive) */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Liste des utilisateurs</CardTitle>
+              </CardHeader>
+
+              <CardContent>
+                {isLoading ? (
+                  <div className="text-center py-8">Chargement...</div>
+                ) : fetchError ? (
+                  <div className="text-center py-8 text-red-600">
+                    Erreur: {fetchError}
+                  </div>
+                ) : filteredUsers.length === 0 ? (
+                  <div className="text-center py-8">
+                    <User className="h-12 w-12 text-gray-400 mx-auto mb-4 dark:text-gray-200" />
+                    <p className="text-gray-500 dark:text-gray-300">
+                      Aucun utilisateur trouvé
+                    </p>
+                    {activeFiltersCount > 0 && (
+                      <Button
+                        variant="outline"
+                        onClick={resetFilters}
+                        className="mt-2 bg-transparent"
+                      >
+                        Réinitialiser les filtres
+                      </Button>
+                    )}
+                  </div>
+                ) : (
+                  <>
+                    {/* Table for medium+ screens */}
+                    <div className="hidden md:block overflow-x-auto">
+                      <Table className="min-w-[900px]">
+                        {/* min-w to keep columns readable */}
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Utilisateur</TableHead>
+                            <TableHead>Email</TableHead>
+                            <TableHead className="hidden lg:table-cell">
+                              Téléphone
+                            </TableHead>
+                            <TableHead>Rôle</TableHead>
+                            <TableHead className="hidden lg:table-cell">
+                              Entrepôt
+                            </TableHead>
+                            <TableHead className="hidden sm:table-cell">
+                              Statut
+                            </TableHead>
+                            <TableHead className="hidden xl:table-cell">
+                              Dernière connexion
+                            </TableHead>
+                            <TableHead>Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {filteredUsers.map((user) => (
+                            <TableRow key={user.id}>
+                              <TableCell>
+                                <div className="flex items-center space-x-3">
+                                  <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                                    <User className="h-4 w-4 text-blue-600" />
+                                  </div>
+                                  <span className="font-medium">
+                                    {user.name}
+                                  </span>
                                 </div>
-                                <span className="font-medium">{user.name}</span>
-                              </div>
-                            </TableCell>
+                              </TableCell>
 
-                            <TableCell>
-                              <div className="flex items-center gap-2">
-                                <Mail className="h-4 w-4 text-gray-400" />
-                                <span className="truncate max-w-[220px] block">
+                              <TableCell>
+                                <div className="flex items-center gap-2">
+                                  <Mail className="h-4 w-4 text-gray-400 dark:text-gray-200" />
+                                  <span className="truncate max-w-[220px] block">
+                                    {user.email}
+                                  </span>
+                                </div>
+                              </TableCell>
+
+                              <TableCell className="hidden lg:table-cell">
+                                <div className="flex items-center gap-2">
+                                  <Phone className="h-4 w-4 text-gray-400 dark:text-gray-200" />
+                                  <span>{user.phone}</span>
+                                </div>
+                              </TableCell>
+
+                              <TableCell>{getRoleBadge(user.role)}</TableCell>
+
+                              <TableCell className="hidden lg:table-cell">
+                                {user.warehouse}
+                              </TableCell>
+
+                              <TableCell className="hidden sm:table-cell">
+                                {getStatusBadge(user.status)}
+                              </TableCell>
+
+                              <TableCell className="hidden xl:table-cell text-sm text-gray-600 dark:text-gray-300">
+                                {formatDate(user.lastlogin) ?? "Jamais"}
+                              </TableCell>
+
+                              <TableCell>
+                                <div className="flex items-center gap-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleEditUser(user)}
+                                    aria-label={`Modifier ${user.name}`}
+                                  >
+                                    <Edit className="h-4 w-4" />
+                                  </Button>
+
+                                  <AlertDialog>
+                                    <AlertDialogTrigger asChild>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        aria-label={`Supprimer ${user.name}`}
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent>
+                                      <AlertDialogHeader>
+                                        <AlertDialogTitle>
+                                          Supprimer l'utilisateur
+                                        </AlertDialogTitle>
+                                        <div className="text-sm">
+                                          Êtes-vous sûr de vouloir supprimer
+                                          <strong>{user.name}</strong> ?
+                                        </div>
+                                      </AlertDialogHeader>
+                                      <AlertDialogFooter>
+                                        <AlertDialogCancel>
+                                          Annuler
+                                        </AlertDialogCancel>
+                                        <AlertDialogAction
+                                          onClick={() =>
+                                            handleDeleteUser(user.id)
+                                          }
+                                          className="bg-red-600 hover:bg-red-700"
+                                          disabled={isDeletingId === user.id}
+                                        >
+                                          {isDeletingId === user.id
+                                            ? "Suppression..."
+                                            : "Supprimer"}
+                                        </AlertDialogAction>
+                                      </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                  </AlertDialog>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+
+                    {/* Card list for small screens */}
+                    <div className="block md:hidden space-y-3">
+                      {filteredUsers.map((user) => (
+                        <div
+                          key={user.id}
+                          className="bg-white border rounded-lg p-4 shadow-sm"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                                <User className="h-5 w-5 text-blue-600" />
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <div className="font-medium">{user.name}</div>
+                                  <div className="text-xs text-gray-500 dark:text-gray-300">
+                                    • {user.role}
+                                  </div>
+                                </div>
+                                <div className="text-sm text-gray-600  dark:text-gray-300 truncate max-w-[220px]">
                                   {user.email}
-                                </span>
+                                </div>
+                                <div className="text-sm text-gray-500 dark:text-gray-300">
+                                  {user.phone}
+                                </div>
                               </div>
-                            </TableCell>
+                            </div>
 
-                            <TableCell className="hidden lg:table-cell">
-                              <div className="flex items-center gap-2">
-                                <Phone className="h-4 w-4 text-gray-400" />
-                                <span>{user.phone}</span>
-                              </div>
-                            </TableCell>
-
-                            <TableCell>{getRoleBadge(user.role)}</TableCell>
-
-                            <TableCell className="hidden lg:table-cell">
-                              {user.warehouse}
-                            </TableCell>
-
-                            <TableCell className="hidden sm:table-cell">
-                              {getStatusBadge(user.status)}
-                            </TableCell>
-
-                            <TableCell className="hidden xl:table-cell text-sm text-gray-600">
-                              {user.lastlogin ?? "Jamais"}
-                            </TableCell>
-
-                            <TableCell>
+                            <div className="flex flex-col items-end gap-2">
+                              <div>{getStatusBadge(user.status)}</div>
                               <div className="flex items-center gap-1">
                                 <Button
                                   variant="ghost"
@@ -867,7 +1072,6 @@ export default function UsersPage() {
                                 >
                                   <Edit className="h-4 w-4" />
                                 </Button>
-
                                 <AlertDialog>
                                   <AlertDialogTrigger asChild>
                                     <Button
@@ -884,7 +1088,7 @@ export default function UsersPage() {
                                         Supprimer l'utilisateur
                                       </AlertDialogTitle>
                                       <div className="text-sm">
-                                        Êtes-vous sûr de vouloir supprimer{" "}
+                                        Êtes-vous sûr de vouloir supprimer
                                         <strong>{user.name}</strong> ?
                                       </div>
                                     </AlertDialogHeader>
@@ -907,229 +1111,147 @@ export default function UsersPage() {
                                   </AlertDialogContent>
                                 </AlertDialog>
                               </div>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-
-                  {/* Card list for small screens */}
-                  <div className="block md:hidden space-y-3">
-                    {filteredUsers.map((user) => (
-                      <div
-                        key={user.id}
-                        className="bg-white border rounded-lg p-4 shadow-sm"
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                              <User className="h-5 w-5 text-blue-600" />
-                            </div>
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <div className="font-medium">{user.name}</div>
-                                <div className="text-xs text-gray-500">
-                                  • {user.role}
-                                </div>
-                              </div>
-                              <div className="text-sm text-gray-600 truncate max-w-[220px]">
-                                {user.email}
-                              </div>
-                              <div className="text-sm text-gray-500">
-                                {user.phone}
-                              </div>
                             </div>
                           </div>
 
-                          <div className="flex flex-col items-end gap-2">
-                            <div>{getStatusBadge(user.status)}</div>
-                            <div className="flex items-center gap-1">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleEditUser(user)}
-                                aria-label={`Modifier ${user.name}`}
-                              >
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                              <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    aria-label={`Supprimer ${user.name}`}
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                  <AlertDialogHeader>
-                                    <AlertDialogTitle>
-                                      Supprimer l'utilisateur
-                                    </AlertDialogTitle>
-                                    <div className="text-sm">
-                                      Êtes-vous sûr de vouloir supprimer{" "}
-                                      <strong>{user.name}</strong> ?
-                                    </div>
-                                  </AlertDialogHeader>
-                                  <AlertDialogFooter>
-                                    <AlertDialogCancel>
-                                      Annuler
-                                    </AlertDialogCancel>
-                                    <AlertDialogAction
-                                      onClick={() => handleDeleteUser(user.id)}
-                                      className="bg-red-600 hover:bg-red-700"
-                                      disabled={isDeletingId === user.id}
-                                    >
-                                      {isDeletingId === user.id
-                                        ? "Suppression..."
-                                        : "Supprimer"}
-                                    </AlertDialogAction>
-                                  </AlertDialogFooter>
-                                </AlertDialogContent>
-                              </AlertDialog>
+                          {/* Optional details row (warehouse / lastlogin) */}
+                          <div className="mt-3 flex flex-wrap gap-3 text-sm text-gray-600 dark:text-gray-300">
+                            <div className="px-2 py-1 bg-gray-100 rounded">
+                              {user.warehouse}
+                            </div>
+                            <div className="px-2 py-1 bg-gray-100 rounded">
+                              {formatDate(user.lastlogin) ?? "Jamais connecté"}
                             </div>
                           </div>
                         </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          </main>
+        </div>
 
-                        {/* Optional details row (warehouse / lastlogin) */}
-                        <div className="mt-3 flex flex-wrap gap-3 text-sm text-gray-600">
-                          <div className="px-2 py-1 bg-gray-100 rounded">
-                            {user.warehouse}
-                          </div>
-                          <div className="px-2 py-1 bg-gray-100 rounded">
-                            {user.lastlogin ?? "Jamais connecté"}
-                          </div>
-                        </div>
-                      </div>
+        {/* Edit dialog (shared UI with create) */}
+        <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>Modifier l'utilisateur</DialogTitle>
+            </DialogHeader>
+
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="edit-name" className="text-right">
+                  Nom *
+                </Label>
+                <Input
+                  id="edit-name"
+                  value={editUser.name}
+                  onChange={(e) =>
+                    setEditUser((p) => ({ ...p, name: e.target.value }))
+                  }
+                  className="col-span-3"
+                />
+              </div>
+
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="edit-email" className="text-right">
+                  Email *
+                </Label>
+                <Input
+                  id="edit-email"
+                  value={editUser.email}
+                  onChange={(e) =>
+                    setEditUser((p) => ({ ...p, email: e.target.value }))
+                  }
+                  className="col-span-3"
+                />
+              </div>
+
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="edit-phone" className="text-right">
+                  Téléphone *
+                </Label>
+                <Input
+                  id="edit-phone"
+                  value={editUser.phone}
+                  onChange={(e) =>
+                    setEditUser((p) => ({ ...p, phone: e.target.value }))
+                  }
+                  className="col-span-3"
+                />
+              </div>
+
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label className="text-right">Rôle *</Label>
+                <Select
+                  value={editUser.role}
+                  onValueChange={(v) => setEditUser((p) => ({ ...p, role: v }))}
+                >
+                  <SelectTrigger className="col-span-3">
+                    <SelectValue placeholder="Sélectionner un rôle" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {roles.map((r) => (
+                      <SelectItem key={r.value} value={r.value}>
+                        {r.label}
+                      </SelectItem>
                     ))}
-                  </div>
-                </>
-              )}
-            </CardContent>
-          </Card>
-        </main>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label className="text-right">Entrepôt *</Label>
+                <Select
+                  value={editUser.warehouse}
+                  onValueChange={(v) =>
+                    setEditUser((p) => ({ ...p, warehouse: v }))
+                  }
+                >
+                  <SelectTrigger className="col-span-3">
+                    <SelectValue placeholder="Sélectionner un entrepôt" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {warehouses.map((w) => (
+                      <SelectItem key={w.value} value={w.value}>
+                        {w.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label className="text-right">Actif</Label>
+                <Switch
+                  checked={editUser.status}
+                  onCheckedChange={(c) =>
+                    setEditUser((p) => ({ ...p, status: Boolean(c) }))
+                  }
+                  className="col-span-3"
+                />
+              </div>
+
+              <div className="flex justify-end space-x-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setIsEditModalOpen(false)}
+                >
+                  Annuler
+                </Button>
+                <Button
+                  onClick={handleSaveEdit}
+                  disabled={isSaving || !isEditFormValid}
+                >
+                  {isSaving ? "Sauvegarde..." : "Sauvegarder"}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
-
-      {/* Edit dialog (shared UI with create) */}
-      <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Modifier l'utilisateur</DialogTitle>
-          </DialogHeader>
-
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit-name" className="text-right">
-                Nom *
-              </Label>
-              <Input
-                id="edit-name"
-                value={editUser.name}
-                onChange={(e) =>
-                  setEditUser((p) => ({ ...p, name: e.target.value }))
-                }
-                className="col-span-3"
-              />
-            </div>
-
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit-email" className="text-right">
-                Email *
-              </Label>
-              <Input
-                id="edit-email"
-                value={editUser.email}
-                onChange={(e) =>
-                  setEditUser((p) => ({ ...p, email: e.target.value }))
-                }
-                className="col-span-3"
-              />
-            </div>
-
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit-phone" className="text-right">
-                Téléphone *
-              </Label>
-              <Input
-                id="edit-phone"
-                value={editUser.phone}
-                onChange={(e) =>
-                  setEditUser((p) => ({ ...p, phone: e.target.value }))
-                }
-                className="col-span-3"
-              />
-            </div>
-
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label className="text-right">Rôle *</Label>
-              <Select
-                value={editUser.role}
-                onValueChange={(v) => setEditUser((p) => ({ ...p, role: v }))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Sélectionner un rôle" />
-                </SelectTrigger>
-                <SelectContent>
-                  {roles.map((r) => (
-                    <SelectItem key={r.value} value={r.value}>
-                      {r.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label className="text-right">Entrepôt *</Label>
-              <Select
-                value={editUser.warehouse}
-                onValueChange={(v) =>
-                  setEditUser((p) => ({ ...p, warehouse: v }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Sélectionner un entrepôt" />
-                </SelectTrigger>
-                <SelectContent>
-                  {warehouses.map((w) => (
-                    <SelectItem key={w.value} value={w.value}>
-                      {w.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label className="text-right">Actif</Label>
-              <Switch
-                checked={editUser.status}
-                onCheckedChange={(c) =>
-                  setEditUser((p) => ({ ...p, status: Boolean(c) }))
-                }
-                className="col-span-3"
-              />
-            </div>
-
-            <div className="flex justify-end space-x-2">
-              <Button
-                variant="outline"
-                onClick={() => setIsEditModalOpen(false)}
-              >
-                Annuler
-              </Button>
-              <Button
-                onClick={handleSaveEdit}
-                disabled={isSaving || !isEditFormValid}
-              >
-                {isSaving ? "Sauvegarde..." : "Sauvegarder"}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-    </div>
+    </RoleGuard>
   );
 }

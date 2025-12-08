@@ -40,6 +40,8 @@ import {
 } from "@/app/dashboard/components/ui/select";
 import { DatePickerRange } from "@/app/dashboard/components/date-picker-range";
 import { toast } from "@/hooks/use-toast";
+import * as XLSX from "xlsx"; // L'import de xlsx
+import { RoleGuard } from "../components/auth/role-guard";
 
 // Types pour les données
 interface SalesData {
@@ -69,6 +71,24 @@ interface TopProductData {
   revenue: number;
 }
 
+interface PeriodData {
+  sales: SalesData[];
+  kpis: KpisData;
+  categories: CategoryData[];
+  topProducts: TopProductData[];
+}
+
+interface DashboardData {
+  week: PeriodData;
+  month: PeriodData;
+  quarter: PeriodData;
+  year: PeriodData;
+  custom: PeriodData;
+}
+
+type Period = "week" | "month" | "quarter" | "year" | "custom";
+
+// tes interfaces:
 interface PeriodData {
   sales: SalesData[];
   kpis: KpisData;
@@ -209,7 +229,7 @@ const ErrorMessage = ({
     <h3 className="text-lg font-semibold text-red-600 mb-2">
       Erreur de chargement
     </h3>
-    <p className="text-gray-600 mb-4">{message}</p>
+    <p className="text-gray-600 mb-4 dark:text-gray-300">{message}</p>
     <Button
       onClick={onRetry}
       variant="outline"
@@ -221,7 +241,7 @@ const ErrorMessage = ({
 );
 
 export default function ReportsPage() {
-  const [selectedPeriod, setSelectedPeriod] = useState("week");
+  const [selectedPeriod, setSelectedPeriod] = useState<Period>("week");
   const [selectedWarehouse, setSelectedWarehouse] = useState("all");
   const [customDateRange, setCustomDateRange] = useState<{
     start?: Date;
@@ -375,35 +395,504 @@ export default function ReportsPage() {
     setTooltip({ visible: false, x: 0, y: 0, content: "" });
   };
 
+  // // Fonction pour exporter en PDF
+  // const handleExportPDF = async () => {
+  //   toast({
+  //     title: "Export PDF en cours...",
+  //     description: "Génération du rapport PDF avec les données actuelles",
+  //   });
+
+  //   // Implémentation PDF simplifiée
+  //   setTimeout(() => {
+  //     toast({
+  //       title: "Export PDF réussi",
+  //       description: "Le rapport PDF a été téléchargé avec succès.",
+  //     });
+  //   }, 1000);
+  // };
+
+  // // Fonction pour exporter en Excel
+  // const handleExportExcel = () => {
+  //   toast({
+  //     title: "Export Excel en cours...",
+  //     description: "Génération du rapport Excel avec les données actuelles",
+  //   });
+
+  //   setTimeout(() => {
+  //     toast({
+  //       title: "Export Excel réussi",
+  //       description: "Le rapport Excel a été téléchargé avec succès.",
+  //     });
+  //   }, 1000);
+  // };
+
+  // Fonction pour exporter en PDF (rapport complet basé sur les données backend)
+  const [data, setData] = useState<DashboardData>(defaultData);
   // Fonction pour exporter en PDF
   const handleExportPDF = async () => {
+    if (!dashboardData) {
+      toast({
+        title: "Erreur d'export",
+        description: "Aucune donnée disponible pour l'export",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Fonction pour formater les nombres en français (sans espace)
+    const formatNumberFR = (num) => {
+      return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+    };
+
+    // Fonction pour formater les euros
+    const formatEuro = (amount) => {
+      return `€${formatNumberFR(amount)}`;
+    };
+
+    const currentPeriodData = getCurrentData();
+    const salesData = currentPeriodData.sales.map((item) => ({
+      ...item,
+      sales: Math.round(item.sales * warehouseMultiplier),
+      orders: Math.round(item.orders * warehouseMultiplier),
+      profit: Math.round(item.profit * warehouseMultiplier),
+    }));
+    const kpis = {
+      revenue: Math.round(currentPeriodData.kpis.revenue * warehouseMultiplier),
+      orders: Math.round(currentPeriodData.kpis.orders * warehouseMultiplier),
+      clients: Math.round(currentPeriodData.kpis.clients * warehouseMultiplier),
+      stockout: currentPeriodData.kpis.stockout,
+    };
+    const categoryData = currentPeriodData.categories.map((category) => ({
+      ...category,
+      sales: Math.round(category.sales * warehouseMultiplier),
+    }));
+    const topProductsData = currentPeriodData.topProducts.map((product) => ({
+      ...product,
+      sales: Math.round(product.sales * warehouseMultiplier),
+      revenue: Math.round(product.revenue * warehouseMultiplier),
+    }));
+
     toast({
       title: "Export PDF en cours...",
       description: "Génération du rapport PDF avec les données actuelles",
     });
 
-    // Implémentation PDF simplifiée
-    setTimeout(() => {
+    try {
+      const { jsPDF } = await import("jspdf");
+      const doc = new jsPDF();
+
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      let yPosition = 20;
+
+      // Titre
+      doc.setFontSize(20);
+      doc.setFont(undefined, "bold");
+      doc.text("RAPPORT STOCKPRO", pageWidth / 2, yPosition, {
+        align: "center",
+      });
+      yPosition += 15;
+
+      // Infos générales
+      doc.setFontSize(12);
+      doc.setFont(undefined, "normal");
+
+      const periodText = isCustomPeriod
+        ? `Du ${customDateRange.start?.toLocaleDateString(
+            "fr-FR"
+          )} au ${customDateRange.end?.toLocaleDateString("fr-FR")}`
+        : selectedPeriod === "week"
+        ? "Cette semaine"
+        : selectedPeriod === "month"
+        ? "Ce mois"
+        : selectedPeriod === "quarter"
+        ? "Ce trimestre"
+        : "Cette année";
+
+      doc.text(
+        `Généré le: ${new Date().toLocaleDateString("fr-FR")}`,
+        20,
+        yPosition
+      );
+      yPosition += 8;
+      doc.text(`Période: ${periodText}`, 20, yPosition);
+      yPosition += 8;
+      doc.text(
+        `Entrepôt: ${
+          dataByWarehouse[selectedWarehouse as keyof typeof dataByWarehouse]
+            .name
+        }`,
+        20,
+        yPosition
+      );
+      yPosition += 20;
+
+      // KPIs
+      doc.setFontSize(16);
+      doc.setFont(undefined, "bold");
+      doc.text("INDICATEURS CLÉS", 20, yPosition);
+      yPosition += 15;
+
+      doc.setFontSize(11);
+      doc.setFont(undefined, "normal");
+
+      const kpiData = [
+        ["Chiffre d'affaires", formatEuro(kpis.revenue)],
+        ["Commandes", kpis.orders.toString()],
+        ["Clients actifs", kpis.clients.toString()],
+        ["Taux de rupture", `${kpis.stockout}%`],
+      ];
+
+      kpiData.forEach(([label, value], index) => {
+        const x = 20 + (index % 2) * 90;
+        const y = yPosition + Math.floor(index / 2) * 15;
+        doc.text(`${label}:`, x, y);
+        doc.setFont(undefined, "bold");
+        doc.text(value, x + 60, y);
+        doc.setFont(undefined, "normal");
+      });
+      yPosition += 40;
+
+      // Données de ventes
+      doc.setFontSize(16);
+      doc.setFont(undefined, "bold");
+      doc.text("DONNÉES DE VENTES", 20, yPosition);
+      yPosition += 15;
+
+      doc.setFontSize(10);
+      doc.setFont(undefined, "bold");
+      doc.text("Période", 20, yPosition);
+      doc.text("Ventes (€)", 60, yPosition);
+      doc.text("Commandes", 100, yPosition);
+      doc.text("Profit (€)", 140, yPosition);
+      yPosition += 8;
+
+      doc.line(20, yPosition, 180, yPosition);
+      yPosition += 5;
+
+      doc.setFont(undefined, "normal");
+      salesData.forEach((item) => {
+        if (yPosition > pageHeight - 30) {
+          doc.addPage();
+          yPosition = 20;
+        }
+        doc.text(item.month, 20, yPosition);
+        doc.text(formatEuro(item.sales), 60, yPosition);
+        doc.text(item.orders.toString(), 100, yPosition);
+        doc.text(formatEuro(item.profit), 140, yPosition);
+        yPosition += 8;
+      });
+      yPosition += 15;
+
+      // Top produits
+      if (yPosition > pageHeight - 80) {
+        doc.addPage();
+        yPosition = 20;
+      }
+
+      doc.setFontSize(16);
+      doc.setFont(undefined, "bold");
+      doc.text("TOP PRODUITS", 20, yPosition);
+      yPosition += 15;
+
+      doc.setFontSize(10);
+      doc.setFont(undefined, "bold");
+      doc.text("Produit", 20, yPosition);
+      doc.text("Ventes", 120, yPosition);
+      doc.text("Revenus (€)", 150, yPosition);
+      yPosition += 8;
+
+      doc.line(20, yPosition, 180, yPosition);
+      yPosition += 5;
+
+      doc.setFont(undefined, "normal");
+      topProductsData.slice(0, 7).forEach((product) => {
+        if (yPosition > pageHeight - 30) {
+          doc.addPage();
+          yPosition = 20;
+        }
+        const productName =
+          product.name.length > 25
+            ? product.name.substring(0, 25) + "..."
+            : product.name;
+        doc.text(productName, 20, yPosition);
+        doc.text(product.sales.toString(), 120, yPosition);
+        doc.text(formatEuro(product.revenue), 150, yPosition);
+        yPosition += 8;
+      });
+      yPosition += 15;
+
+      // Catégories
+      if (yPosition > pageHeight - 60) {
+        doc.addPage();
+        yPosition = 20;
+      }
+
+      doc.setFontSize(16);
+      doc.setFont(undefined, "bold");
+      doc.text("RÉPARTITION PAR CATÉGORIE", 20, yPosition);
+      yPosition += 15;
+
+      doc.setFontSize(10);
+      doc.setFont(undefined, "bold");
+      doc.text("Catégorie", 20, yPosition);
+      doc.text("Pourcentage", 100, yPosition);
+      doc.text("Ventes (€)", 140, yPosition);
+      yPosition += 8;
+
+      doc.line(20, yPosition, 180, yPosition);
+      yPosition += 5;
+
+      doc.setFont(undefined, "normal");
+      categoryData.forEach((category) => {
+        if (yPosition > pageHeight - 30) {
+          doc.addPage();
+          yPosition = 20;
+        }
+        doc.text(category.name, 20, yPosition);
+        doc.text(`${category.value}%`, 100, yPosition);
+        doc.text(formatEuro(category.sales), 140, yPosition);
+        yPosition += 8;
+      });
+
+      // Pied de page
+      const totalPages = doc.internal.getNumberOfPages();
+      for (let i = 1; i <= totalPages; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.setFont(undefined, "normal");
+        doc.text(
+          `Page ${i} sur ${totalPages}`,
+          pageWidth / 2,
+          pageHeight - 10,
+          {
+            align: "center",
+          }
+        );
+        doc.text(
+          "StockPro - Rapport généré automatiquement",
+          pageWidth / 2,
+          pageHeight - 5,
+          { align: "center" }
+        );
+      }
+
+      const fileName = `rapport-stockpro-${selectedPeriod}-${selectedWarehouse}-${
+        new Date().toISOString().split("T")[0]
+      }.pdf`;
+      doc.save(fileName);
+
       toast({
         title: "Export PDF réussi",
         description: "Le rapport PDF a été téléchargé avec succès.",
       });
-    }, 1000);
+    } catch (error) {
+      console.error("Erreur lors de la génération du PDF:", error);
+      toast({
+        title: "Erreur d'export",
+        description: "Une erreur est survenue lors de la génération du PDF.",
+        variant: "destructive",
+      });
+    }
   };
+  // Fonction pour exporter en Excel (XLSX)
+  const handleExportExcel = async () => {
+    if (!dashboardData) {
+      toast({
+        title: "Erreur d'export",
+        description: "Aucune donnée disponible pour l'export",
+        variant: "destructive",
+      });
+      return;
+    }
 
-  // Fonction pour exporter en Excel
-  const handleExportExcel = () => {
     toast({
       title: "Export Excel en cours...",
       description: "Génération du rapport Excel avec les données actuelles",
     });
 
-    setTimeout(() => {
+    try {
+      const currentPeriodData = getCurrentData();
+      const salesData = currentPeriodData.sales.map((item) => ({
+        ...item,
+        sales: Math.round(item.sales * warehouseMultiplier),
+        orders: Math.round(item.orders * warehouseMultiplier),
+        profit: Math.round(item.profit * warehouseMultiplier),
+      }));
+      const kpis = {
+        revenue: Math.round(
+          currentPeriodData.kpis.revenue * warehouseMultiplier
+        ),
+        orders: Math.round(currentPeriodData.kpis.orders * warehouseMultiplier),
+        clients: Math.round(
+          currentPeriodData.kpis.clients * warehouseMultiplier
+        ),
+        stockout: currentPeriodData.kpis.stockout,
+      };
+      const categoryData = currentPeriodData.categories.map((category) => ({
+        ...category,
+        sales: Math.round(category.sales * warehouseMultiplier),
+      }));
+      const topProductsData = currentPeriodData.topProducts.map((product) => ({
+        ...product,
+        sales: Math.round(product.sales * warehouseMultiplier),
+        revenue: Math.round(product.revenue * warehouseMultiplier),
+      }));
+
+      // Créer un nouveau classeur
+      const wb = XLSX.utils.book_new();
+
+      // 1. Feuille des indicateurs clés
+      const kpiSheetData = [
+        ["RAPPORT STOCKPRO - DONNÉES DASHBOARD"],
+        [],
+        ["Généré le", new Date().toLocaleDateString("fr-FR")],
+        [
+          "Période",
+          isCustomPeriod
+            ? `Du ${customDateRange.start?.toLocaleDateString(
+                "fr-FR"
+              )} au ${customDateRange.end?.toLocaleDateString("fr-FR")}`
+            : selectedPeriod === "week"
+            ? "Cette semaine"
+            : selectedPeriod === "month"
+            ? "Ce mois"
+            : selectedPeriod === "quarter"
+            ? "Ce trimestre"
+            : "Cette année",
+        ],
+        [
+          "Entrepôt",
+          dataByWarehouse[selectedWarehouse as keyof typeof dataByWarehouse]
+            .name,
+        ],
+        [],
+        ["INDICATEURS CLÉS"],
+        ["Chiffre d'affaires (€)", kpis.revenue],
+        ["Commandes", kpis.orders],
+        ["Clients actifs", kpis.clients],
+        ["Taux de rupture (%)", kpis.stockout],
+      ];
+
+      const kpiSheet = XLSX.utils.aoa_to_sheet(kpiSheetData);
+      XLSX.utils.book_append_sheet(wb, kpiSheet, "Indicateurs");
+
+      // 2. Feuille des ventes
+      const salesSheetData = [
+        ["Période", "Ventes (€)", "Commandes", "Profit (€)"],
+        ...salesData.map((item) => [
+          item.month,
+          item.sales,
+          item.orders,
+          item.profit,
+        ]),
+      ];
+
+      const salesSheet = XLSX.utils.aoa_to_sheet(salesSheetData);
+      XLSX.utils.book_append_sheet(wb, salesSheet, "Ventes");
+
+      // 3. Feuille des top produits
+      const productsSheetData = [
+        ["Produit", "Unités vendues", "Revenus (€)"],
+        ...topProductsData.map((product) => [
+          product.name,
+          product.sales,
+          product.revenue,
+        ]),
+      ];
+
+      const productsSheet = XLSX.utils.aoa_to_sheet(productsSheetData);
+      XLSX.utils.book_append_sheet(wb, productsSheet, "Top Produits");
+
+      // 4. Feuille des catégories
+      const categoriesSheetData = [
+        ["Catégorie", "Pourcentage (%)", "Ventes (€)"],
+        ...categoryData.map((category) => [
+          category.name,
+          category.value,
+          category.sales,
+        ]),
+      ];
+
+      const categoriesSheet = XLSX.utils.aoa_to_sheet(categoriesSheetData);
+      XLSX.utils.book_append_sheet(wb, categoriesSheet, "Catégories");
+
+      // 5. Feuille de synthèse
+      const summarySheetData = [
+        ["SYNTHÈSE DU RAPPORT"],
+        [],
+        [
+          "Période analysée",
+          isCustomPeriod
+            ? `Du ${customDateRange.start?.toLocaleDateString(
+                "fr-FR"
+              )} au ${customDateRange.end?.toLocaleDateString("fr-FR")}`
+            : selectedPeriod === "week"
+            ? "Cette semaine"
+            : selectedPeriod === "month"
+            ? "Ce mois"
+            : selectedPeriod === "quarter"
+            ? "Ce trimestre"
+            : "Cette année",
+        ],
+        [
+          "Total des ventes",
+          salesData.reduce((sum, item) => sum + item.sales, 0),
+        ],
+        [
+          "Total des commandes",
+          salesData.reduce((sum, item) => sum + item.orders, 0),
+        ],
+        [
+          "Total des profits",
+          salesData.reduce((sum, item) => sum + item.profit, 0),
+        ],
+        [
+          "Catégorie la plus vendue",
+          categoryData.length > 0 ? categoryData[0].name : "N/A",
+        ],
+        [
+          "Produit le plus vendu",
+          topProductsData.length > 0 ? topProductsData[0].name : "N/A",
+        ],
+      ];
+
+      const summarySheet = XLSX.utils.aoa_to_sheet(summarySheetData);
+      XLSX.utils.book_append_sheet(wb, summarySheet, "Synthèse");
+
+      // Définir la largeur des colonnes
+      const colWidths = [{ wch: 25 }, { wch: 15 }, { wch: 15 }, { wch: 15 }];
+
+      [
+        kpiSheet,
+        salesSheet,
+        productsSheet,
+        categoriesSheet,
+        summarySheet,
+      ].forEach((sheet) => {
+        sheet["!cols"] = colWidths;
+      });
+
+      // Générer le fichier
+      const fileName = `rapport-stockpro-${selectedPeriod}-${selectedWarehouse}-${
+        new Date().toISOString().split("T")[0]
+      }.xlsx`;
+
+      XLSX.writeFile(wb, fileName);
+
       toast({
         title: "Export Excel réussi",
-        description: "Le rapport Excel a été téléchargé avec succès.",
+        description: "Le rapport XLSX a été téléchargé avec succès.",
       });
-    }, 1000);
+    } catch (error) {
+      console.error("Erreur lors de la génération du XLSX:", error);
+      toast({
+        title: "Erreur d'export",
+        description:
+          "Une erreur est survenue lors de la génération du fichier Excel.",
+        variant: "destructive",
+      });
+    }
   };
 
   // Fonction pour gérer le changement de période
@@ -443,7 +932,7 @@ export default function ReportsPage() {
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-            <p className="mt-4 text-gray-600">
+            <p className="mt-4 text-gray-600 dark:text-gray-300">
               Chargement des données stock...
             </p>
           </div>
@@ -464,476 +953,491 @@ export default function ReportsPage() {
     );
   }
 
+  console.log("KPIs data:", kpis);
+  console.log("Revenue:", kpis.revenue, "Type:", typeof kpis.revenue);
+  console.log("Orders:", kpis.orders, "Type:", typeof kpis.orders);
+
   return (
-    <div className="flex min-h-screen bg-gray-50">
-      <Sidebar />
+    <RoleGuard allowedRoles={["admin"]}>
+      <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900 dark:text-white">
+        <Sidebar />
 
-      <div className="flex-1 flex flex-col">
-        {/* Header */}
-        <header className="bg-white border-b border-gray-200 px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">Rapports</h1>
-              <p className="text-gray-600">
-                Analyses et statistiques détaillées - Données en temps réel
-              </p>
-            </div>
-            <div className="flex space-x-2">
-              <Button variant="outline" onClick={handleExportPDF}>
-                <FileText className="h-4 w-4 mr-2" />
-                Exporter PDF
-              </Button>
-              <Button variant="outline" onClick={handleExportExcel}>
-                <Download className="h-4 w-4 mr-2" />
-                Exporter Excel
-              </Button>
-              <Button variant="outline" onClick={fetchData}>
-                <Loader2 className="h-4 w-4 mr-2" />
-                Actualiser
-              </Button>
-            </div>
-          </div>
-        </header>
-
-        {/* Main Content */}
-        <main className="flex-1 p-6">
-          {/* Filters */}
-          <Card className="mb-6">
-            <CardContent className="p-6">
-              <div className="flex flex-col md:flex-row gap-4">
-                <div className="flex-1">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Période
-                  </label>
-                  <Select
-                    value={selectedPeriod}
-                    onValueChange={handlePeriodChange}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Sélectionner une période" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="week">Cette semaine</SelectItem>
-                      <SelectItem value="month">Ce mois</SelectItem>
-                      <SelectItem value="quarter">Ce trimestre</SelectItem>
-                      <SelectItem value="year">Cette année</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex-1">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Entrepôt
-                  </label>
-                  <Select
-                    value={selectedWarehouse}
-                    onValueChange={handleWarehouseChange}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Sélectionner un entrepôt" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Tous les entrepôts</SelectItem>
-                      <SelectItem value="main">Entrepôt Principal</SelectItem>
-                      <SelectItem value="south">Entrepôt Sud</SelectItem>
-                      <SelectItem value="north">Entrepôt Nord</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex-1">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Dates personnalisées{" "}
-                    {isCustomPeriod && (
-                      <span className="text-green-600 text-xs">(Actif)</span>
-                    )}
-                  </label>
-                  <DatePickerRange onDateChange={handleDateChange} />
-                </div>
+        <div className="flex-1 flex flex-col">
+          {/* Header */}
+          <header className="bg-white border-b border-gray-200 px-6 py-4 dark:bg-gray-900 dark:text-white">
+            <div className="flex items-center justify-between">
+              <div className="ml-10 lg:ml-0">
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-300">
+                  Rapports
+                </h1>
+                <p className="text-gray-600 dark:text-gray-400">
+                  Analyses et statistiques détaillées - Données en temps réel
+                </p>
               </div>
-            </CardContent>
-          </Card>
+              <div className="flex space-x-2">
+                <Button variant="outline" onClick={handleExportPDF}>
+                  <FileText className="h-4 w-4 mr-2" />
+                  Exporter PDF
+                </Button>
+                <Button variant="outline" onClick={handleExportExcel}>
+                  <Download className="h-4 w-4 mr-2" />
+                  Exporter Excel
+                </Button>
+                <Button variant="outline" onClick={fetchData}>
+                  <Loader2 className="h-4 w-4 mr-2" />
+                  Actualiser
+                </Button>
+              </div>
+            </div>
+          </header>
 
-          {/* KPI Cards - Dynamiques depuis l'API */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-            <Card>
+          {/* Main Content */}
+          <main className="flex-1 p-6">
+            {/* Filters */}
+            <Card className="mb-6">
               <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">
-                      Chiffre d'affaires
-                    </p>
-                    <p className="text-2xl font-bold">
-                      €{kpis.revenue.toLocaleString()}
-                    </p>
-                    <p className="text-sm text-green-600 flex items-center mt-1">
-                      <TrendingUp className="h-4 w-4 mr-1" />
-                      Données en direct
-                    </p>
+                <div className="flex flex-col md:flex-row gap-4">
+                  <div className="flex-1">
+                    <label className="block text-sm font-medium text-gray-700 mb-2 dark:text-gray-400">
+                      Période
+                    </label>
+                    <Select
+                      value={selectedPeriod}
+                      onValueChange={handlePeriodChange}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Sélectionner une période" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="week">Cette semaine</SelectItem>
+                        <SelectItem value="month">Ce mois</SelectItem>
+                        <SelectItem value="quarter">Ce trimestre</SelectItem>
+                        <SelectItem value="year">Cette année</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
-                  <DollarSign className="h-8 w-8 text-green-600" />
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">
-                      Commandes
-                    </p>
-                    <p className="text-2xl font-bold">
-                      {kpis.orders.toLocaleString()}
-                    </p>
-                    <p className="text-sm text-green-600 flex items-center mt-1">
-                      <TrendingUp className="h-4 w-4 mr-1" />
-                      Données en direct
-                    </p>
+                  <div className="flex-1">
+                    <label className="block text-sm font-medium text-gray-700 mb-2 dark:text-gray-400">
+                      Entrepôt
+                    </label>
+                    <Select
+                      value={selectedWarehouse}
+                      onValueChange={handleWarehouseChange}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Sélectionner un entrepôt" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Tous les entrepôts</SelectItem>
+                        <SelectItem value="main">Entrepôt Principal</SelectItem>
+                        <SelectItem value="south">Entrepôt Sud</SelectItem>
+                        <SelectItem value="north">Entrepôt Nord</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
-                  <ShoppingCart className="h-8 w-8 text-blue-600" />
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">
-                      Clients actifs
-                    </p>
-                    <p className="text-2xl font-bold">
-                      {kpis.clients.toLocaleString()}
-                    </p>
-                    <p className="text-sm text-green-600 flex items-center mt-1">
-                      <TrendingUp className="h-4 w-4 mr-1" />
-                      Données en direct
-                    </p>
+                  <div className="flex-1">
+                    <label className="block text-sm font-medium text-gray-700 mb-2 dark:text-gray-400">
+                      Dates personnalisées{" "}
+                      {isCustomPeriod && (
+                        <span className="text-green-600 text-xs">(Actif)</span>
+                      )}
+                    </label>
+                    <DatePickerRange onDateChange={handleDateChange} />
                   </div>
-                  <Users className="h-8 w-8 text-purple-600" />
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">
-                      Taux de rupture
-                    </p>
-                    <p className="text-2xl font-bold">{kpis.stockout}%</p>
-                    <p className="text-sm text-green-600 flex items-center mt-1">
-                      <TrendingDown className="h-4 w-4 mr-1" />
-                      Données en direct
-                    </p>
-                  </div>
-                  <Package className="h-8 w-8 text-orange-600" />
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Charts Section */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-            {/* Évolution des ventes */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Évolution des ventes et profits</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="h-80 relative" onMouseMove={updateTooltip}>
-                  <AreaChart
-                    style={{
-                      width: "100%",
-                      maxWidth: "700px",
-                      maxHeight: "70vh",
-                      aspectRatio: 1.618,
-                    }}
-                    responsive
-                    data={salesData}
-                    margin={{
-                      top: 20,
-                      right: 0,
-                      left: 0,
-                      bottom: 5,
-                    }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="month" angle={-45} textAnchor="end" />
-                    <YAxis width="auto" />
-                    <Tooltip />
-                    <Area
-                      type="monotone"
-                      dataKey="sales"
-                      stackId="1"
-                      stroke="#8884d8"
-                      fill="#8884d8"
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="profit"
-                      stackId="1"
-                      stroke="#ffc658"
-                      fill="#ffc658"
-                    />
-                  </AreaChart>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Répartition par catégorie - Dynamique depuis l'API */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Répartition des ventes par catégorie</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div
-                  className="h-80 flex items-center justify-center relative"
-                  onMouseMove={updateTooltip}
-                >
-                  <svg width="280" height="280" viewBox="0 0 280 280">
-                    {categoryData.map((category, index) => {
-                      const startAngle = index * 90;
-                      const endAngle = (index + 1) * 90;
-                      const startRad = (startAngle * Math.PI) / 180;
-                      const endRad = (endAngle * Math.PI) / 180;
-
-                      const x1 = 140 + 80 * Math.cos(startRad);
-                      const y1 = 140 + 80 * Math.sin(startRad);
-                      const x2 = 140 + 80 * Math.cos(endRad);
-                      const y2 = 140 + 80 * Math.sin(endRad);
-
-                      return (
-                        <path
-                          key={index}
-                          d={`M 140 140 L ${x1} ${y1} A 80 80 0 0 1 ${x2} ${y2} Z`}
-                          fill={category.color}
-                          stroke="white"
-                          strokeWidth="2"
-                          className="cursor-pointer hover:opacity-80 transition-opacity"
-                          onMouseEnter={(e) =>
-                            showTooltip(
-                              e,
-                              `<strong>${category.name}</strong><br/>${
-                                category.value
-                              }% des ventes<br/>€${category.sales.toLocaleString()} de CA`
-                            )
-                          }
-                          onMouseLeave={hideTooltip}
-                        />
-                      );
-                    })}
-                  </svg>
-                </div>
-                <div className="mt-4 grid grid-cols-2 gap-2">
-                  {categoryData.map((category, index) => (
-                    <div key={index} className="flex items-center space-x-2">
-                      <div
-                        className="w-3 h-3 rounded-full"
-                        style={{ backgroundColor: category.color }}
-                      ></div>
-                      <span className="text-sm">{category.name}</span>
-                      <span className="text-sm font-medium ml-auto">
-                        {category.value}%
-                      </span>
+            {/* KPI Cards - Dynamiques depuis l'API */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600 dark:text-gray-300">
+                        Chiffre d'affaires
+                      </p>
+                      <p className="text-2xl font-bold">
+                        €{kpis.revenue ? kpis.revenue.toLocaleString() : "0"}
+                      </p>
+                      <p className="text-sm text-green-600 flex items-center mt-1">
+                        <TrendingUp className="h-4 w-4 mr-1" />
+                        Données en direct
+                      </p>
                     </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Graphique des commandes mensuelles - Dynamique depuis l'API */}
-          <div className="mb-8">
-            <Card>
-              <CardHeader>
-                <CardTitle>Nombre de commandes par période</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="h-80 relative" onMouseMove={updateTooltip}>
-                  <svg width="100%" height="100%" viewBox="0 0 600 300">
-                    {/* Grid */}
-                    <defs>
-                      <pattern
-                        id="barGrid"
-                        width="50"
-                        height="40"
-                        patternUnits="userSpaceOnUse"
-                      >
-                        <path
-                          d="M 50 0 L 0 0 0 40"
-                          fill="none"
-                          stroke="#f0f0f0"
-                          strokeWidth="1"
-                        />
-                      </pattern>
-                    </defs>
-                    <rect width="100%" height="100%" fill="url(#barGrid)" />
-
-                    {/* Interactive Bars */}
-                    {salesData.map((item, i) => {
-                      const maxOrders = Math.max(
-                        ...salesData.map((d) => d.orders)
-                      );
-                      const barHeight =
-                        maxOrders > 0 ? (item.orders / maxOrders) * 200 : 0;
-                      const x = 50 + i * (500 / Math.max(salesData.length, 1));
-                      const y = 250 - barHeight;
-                      return (
-                        <g key={i}>
-                          <rect
-                            x={x - 15}
-                            y={y}
-                            width="30"
-                            height={barHeight}
-                            fill="#10b981"
-                            rx="4"
-                            className="cursor-pointer hover:opacity-80 transition-opacity"
-                            onMouseEnter={(e) =>
-                              showTooltip(
-                                e,
-                                `<strong>${
-                                  item.month
-                                }</strong><br/>Commandes: ${
-                                  item.orders
-                                }<br/>Ventes: €${item.sales.toLocaleString()}`
-                              )
-                            }
-                            onMouseLeave={hideTooltip}
-                          />
-                          <text
-                            x={x}
-                            y={y - 5}
-                            textAnchor="middle"
-                            fontSize="10"
-                            fill="#666"
-                          >
-                            {item.orders}
-                          </text>
-                          <text
-                            x={x}
-                            y="270"
-                            textAnchor="middle"
-                            fontSize="11"
-                            fill="#666"
-                          >
-                            {item.month}
-                          </text>
-                        </g>
-                      );
-                    })}
-                  </svg>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Detailed Reports */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Top produits - Dynamique depuis l'API */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Top produits les plus vendus</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="h-80 relative" onMouseMove={updateTooltip}>
-                  <svg width="100%" height="100%" viewBox="0 0 500 300">
-                    {/* Grid */}
-                    <defs>
-                      <pattern
-                        id="productGrid"
-                        width="50"
-                        height="40"
-                        patternUnits="userSpaceOnUse"
-                      >
-                        <path
-                          d="M 50 0 L 0 0 0 40"
-                          fill="none"
-                          stroke="#f0f0f0"
-                          strokeWidth="1"
-                        />
-                      </pattern>
-                    </defs>
-                    <rect width="100%" height="100%" fill="url(#productGrid)" />
-
-                    {/* Interactive Horizontal bars */}
-                    {topProductsData.map((product, i) => {
-                      const maxSales = Math.max(
-                        ...topProductsData.map((p) => p.sales)
-                      );
-                      const barWidth =
-                        maxSales > 0 ? (product.sales / maxSales) * 300 : 0;
-                      const y = 30 + i * 35;
-                      return (
-                        <g key={i}>
-                          <rect
-                            x="150"
-                            y={y}
-                            width={barWidth}
-                            height="25"
-                            fill="#3b82f6"
-                            rx="4"
-                            className="cursor-pointer hover:opacity-80 transition-opacity"
-                            onMouseEnter={(e) =>
-                              showTooltip(
-                                e,
-                                `<strong>${product.name}</strong><br/>Ventes: ${
-                                  product.sales
-                                } unités<br/>Revenus: €${product.revenue.toLocaleString()}`
-                              )
-                            }
-                            onMouseLeave={hideTooltip}
-                          />
-                          <text
-                            x="145"
-                            y={y + 17}
-                            textAnchor="end"
-                            fontSize="11"
-                            fill="#666"
-                          >
-                            {product.name.length > 15
-                              ? product.name.substring(0, 15) + "..."
-                              : product.name}
-                          </text>
-                          <text
-                            x={155 + barWidth}
-                            y={y + 17}
-                            fontSize="10"
-                            fill="white"
-                            fontWeight="bold"
-                          >
-                            {product.sales}
-                          </text>
-                        </g>
-                      );
-                    })}
-                  </svg>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Analyse des stocks */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Analyse des stocks</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-6" onMouseMove={updateTooltip}>
-                  {/* Section d'analyse des stocks */}
-                  <div className="text-center p-4 bg-blue-50 rounded-lg">
-                    <p className="text-sm text-blue-600">
-                      Données de stock chargées depuis l'API
-                    </p>
-                    <p className="text-xs text-blue-500 mt-1">
-                      Taux de rupture: {kpis.stockout}%
-                    </p>
+                    <DollarSign className="h-8 w-8 text-green-600" />
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </main>
-      </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600 dark:text-gray-300">
+                        Commandes
+                      </p>
+                      <p className="text-2xl font-bold">
+                        {kpis.orders.toLocaleString()}
+                      </p>
+                      <p className="text-sm text-green-600 flex items-center mt-1">
+                        <TrendingUp className="h-4 w-4 mr-1" />
+                        Données en direct
+                      </p>
+                    </div>
+                    <ShoppingCart className="h-8 w-8 text-blue-600" />
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600 dark:text-gray-300">
+                        Clients actifs
+                      </p>
+                      <p className="text-2xl font-bold">
+                        {kpis.clients.toLocaleString()}
+                      </p>
+                      <p className="text-sm text-green-600 flex items-center mt-1">
+                        <TrendingUp className="h-4 w-4 mr-1" />
+                        Données en direct
+                      </p>
+                    </div>
+                    <Users className="h-8 w-8 text-purple-600" />
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600 dark:text-gray-300">
+                        Taux de rupture
+                      </p>
+                      <p className="text-2xl font-bold">{kpis.stockout}%</p>
+                      <p className="text-sm text-green-600 flex items-center mt-1">
+                        <TrendingDown className="h-4 w-4 mr-1" />
+                        Données en direct
+                      </p>
+                    </div>
+                    <Package className="h-8 w-8 text-orange-600" />
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
 
-      {/* Tooltip global qui suit la souris */}
-      <GlobalTooltip {...tooltip} />
-    </div>
+            {/* Charts Section */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+              {/* Évolution des ventes */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Évolution des ventes et profits</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-80 relative" onMouseMove={updateTooltip}>
+                    <AreaChart
+                      style={{
+                        width: "100%",
+                        maxWidth: "700px",
+                        maxHeight: "70vh",
+                        aspectRatio: 1.618,
+                      }}
+                      responsive
+                      data={salesData}
+                      margin={{
+                        top: 20,
+                        right: 0,
+                        left: 0,
+                        bottom: 5,
+                      }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="month" angle={-45} textAnchor="end" />
+                      <YAxis width="auto" />
+                      <Tooltip />
+                      <Area
+                        type="monotone"
+                        dataKey="sales"
+                        stackId="1"
+                        stroke="#8884d8"
+                        fill="#8884d8"
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="profit"
+                        stackId="1"
+                        stroke="#ffc658"
+                        fill="#ffc658"
+                      />
+                    </AreaChart>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Répartition par catégorie - Dynamique depuis l'API */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Répartition des ventes par catégorie</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div
+                    className="h-80 flex items-center justify-center relative"
+                    onMouseMove={updateTooltip}
+                  >
+                    <svg width="280" height="280" viewBox="0 0 280 280">
+                      {categoryData.map((category, index) => {
+                        const startAngle = index * 90;
+                        const endAngle = (index + 1) * 90;
+                        const startRad = (startAngle * Math.PI) / 180;
+                        const endRad = (endAngle * Math.PI) / 180;
+
+                        const x1 = 140 + 80 * Math.cos(startRad);
+                        const y1 = 140 + 80 * Math.sin(startRad);
+                        const x2 = 140 + 80 * Math.cos(endRad);
+                        const y2 = 140 + 80 * Math.sin(endRad);
+
+                        return (
+                          <path
+                            key={index}
+                            d={`M 140 140 L ${x1} ${y1} A 80 80 0 0 1 ${x2} ${y2} Z`}
+                            fill={category.color}
+                            stroke="white"
+                            strokeWidth="2"
+                            className="cursor-pointer hover:opacity-80 transition-opacity"
+                            onMouseEnter={(e) =>
+                              showTooltip(
+                                e,
+                                `<strong>${category.name}</strong><br/>${
+                                  category.value
+                                }% des ventes<br/>€${category.sales.toLocaleString()} de CA`
+                              )
+                            }
+                            onMouseLeave={hideTooltip}
+                          />
+                        );
+                      })}
+                    </svg>
+                  </div>
+                  <div className="mt-4 grid grid-cols-2 gap-2">
+                    {categoryData.map((category, index) => (
+                      <div key={index} className="flex items-center space-x-2">
+                        <div
+                          className="w-3 h-3 rounded-full"
+                          style={{ backgroundColor: category.color }}
+                        ></div>
+                        <span className="text-sm">{category.name}</span>
+                        <span className="text-sm font-medium ml-auto">
+                          {category.value}%
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Graphique des commandes mensuelles - Dynamique depuis l'API */}
+            <div className="mb-8">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Nombre de commandes par période</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-80 relative" onMouseMove={updateTooltip}>
+                    <svg width="100%" height="100%" viewBox="0 0 600 300">
+                      {/* Grid */}
+                      <defs>
+                        <pattern
+                          id="barGrid"
+                          width="50"
+                          height="40"
+                          patternUnits="userSpaceOnUse"
+                        >
+                          <path
+                            d="M 50 0 L 0 0 0 40"
+                            fill="none"
+                            stroke="#f0f0f0"
+                            strokeWidth="1"
+                          />
+                        </pattern>
+                      </defs>
+                      <rect width="100%" height="100%" fill="url(#barGrid)" />
+
+                      {/* Interactive Bars */}
+                      {salesData.map((item, i) => {
+                        const maxOrders = Math.max(
+                          ...salesData.map((d) => d.orders)
+                        );
+                        const barHeight =
+                          maxOrders > 0 ? (item.orders / maxOrders) * 200 : 0;
+                        const x =
+                          50 + i * (500 / Math.max(salesData.length, 1));
+                        const y = 250 - barHeight;
+                        return (
+                          <g key={i}>
+                            <rect
+                              x={x - 15}
+                              y={y}
+                              width="30"
+                              height={barHeight}
+                              fill="#10b981"
+                              rx="4"
+                              className="cursor-pointer hover:opacity-80 transition-opacity"
+                              onMouseEnter={(e) =>
+                                showTooltip(
+                                  e,
+                                  `<strong>${
+                                    item.month
+                                  }</strong><br/>Commandes: ${
+                                    item.orders
+                                  }<br/>Ventes: €${item.sales.toLocaleString()}`
+                                )
+                              }
+                              onMouseLeave={hideTooltip}
+                            />
+                            <text
+                              x={x}
+                              y={y - 5}
+                              textAnchor="middle"
+                              fontSize="10"
+                              fill="#666"
+                            >
+                              {item.orders}
+                            </text>
+                            <text
+                              x={x}
+                              y="270"
+                              textAnchor="middle"
+                              fontSize="11"
+                              fill="#666"
+                            >
+                              {item.month}
+                            </text>
+                          </g>
+                        );
+                      })}
+                    </svg>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Detailed Reports */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Top produits - Dynamique depuis l'API */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Top produits les plus vendus</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-80 relative" onMouseMove={updateTooltip}>
+                    <svg width="100%" height="100%" viewBox="0 0 500 300">
+                      {/* Grid */}
+                      <defs>
+                        <pattern
+                          id="productGrid"
+                          width="50"
+                          height="40"
+                          patternUnits="userSpaceOnUse"
+                        >
+                          <path
+                            d="M 50 0 L 0 0 0 40"
+                            fill="none"
+                            stroke="#f0f0f0"
+                            strokeWidth="1"
+                          />
+                        </pattern>
+                      </defs>
+                      <rect
+                        width="100%"
+                        height="100%"
+                        fill="url(#productGrid)"
+                      />
+
+                      {/* Interactive Horizontal bars */}
+                      {topProductsData.map((product, i) => {
+                        const maxSales = Math.max(
+                          ...topProductsData.map((p) => p.sales)
+                        );
+                        const barWidth =
+                          maxSales > 0 ? (product.sales / maxSales) * 300 : 0;
+                        const y = 30 + i * 35;
+                        return (
+                          <g key={i}>
+                            <rect
+                              x="150"
+                              y={y}
+                              width={barWidth}
+                              height="25"
+                              fill="#3b82f6"
+                              rx="4"
+                              className="cursor-pointer hover:opacity-80 transition-opacity"
+                              onMouseEnter={(e) =>
+                                showTooltip(
+                                  e,
+                                  `<strong>${
+                                    product.name
+                                  }</strong><br/>Ventes: ${
+                                    product.sales
+                                  } unités<br/>Revenus: €${product.revenue.toLocaleString()}`
+                                )
+                              }
+                              onMouseLeave={hideTooltip}
+                            />
+                            <text
+                              x="145"
+                              y={y + 17}
+                              textAnchor="end"
+                              fontSize="11"
+                              fill="#666"
+                            >
+                              {product.name.length > 15
+                                ? product.name.substring(0, 15) + "..."
+                                : product.name}
+                            </text>
+                            <text
+                              x={155 + barWidth}
+                              y={y + 17}
+                              fontSize="10"
+                              fill="white"
+                              fontWeight="bold"
+                            >
+                              {product.sales}
+                            </text>
+                          </g>
+                        );
+                      })}
+                    </svg>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Analyse des stocks */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Analyse des stocks</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-6" onMouseMove={updateTooltip}>
+                    {/* Section d'analyse des stocks */}
+                    <div className="text-center p-4 bg-blue-50 rounded-lg dark:bg-gray-900">
+                      <p className="text-sm text-blue-600 dark:text-blue-100">
+                        Données de stock chargées depuis l'API
+                      </p>
+                      <p className="text-xs text-blue-500 mt-1 dark:text-blue-100">
+                        Taux de rupture: {kpis.stockout}%
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </main>
+        </div>
+
+        {/* Tooltip global qui suit la souris */}
+        <GlobalTooltip {...tooltip} />
+      </div>
+    </RoleGuard>
   );
 }
