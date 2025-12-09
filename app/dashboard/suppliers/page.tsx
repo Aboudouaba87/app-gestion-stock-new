@@ -351,10 +351,10 @@ export default function SuppliersPage() {
       <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900 dark:text-white">
         <Sidebar />
 
-        <div className="flex-1 flex flex-col">
+        <div className="flex-1 flex flex-col overflow-auto">
           {/* Header */}
           <header className="bg-white border-b border-gray-200 px-6 py-4 dark:bg-gray-900 dark:text-white">
-            <div className="flex items-center justify-between">
+            <div className="flex-1 md:flex items-center justify-between">
               <div className="ml-10 lg:ml-0">
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-300">
                   Fournisseurs
@@ -367,12 +367,14 @@ export default function SuppliersPage() {
                 open={isCreateModalOpen}
                 onOpenChange={setIsCreateModalOpen}
               >
-                <DialogTrigger asChild>
-                  <Button className="bg-blue-600 hover:bg-blue-700">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Nouveau fournisseur
-                  </Button>
-                </DialogTrigger>
+                <div className="flex lg:flex-1 justify-center justify-items-end mt-1 lg:mt-0">
+                  <DialogTrigger asChild>
+                    <Button className="bg-blue-600 hover:bg-blue-700">
+                      <Plus className="h-4 w-4 mr-2" />
+                      Nouveau fournisseur
+                    </Button>
+                  </DialogTrigger>
+                </div>
                 <DialogContent className="sm:max-w-[500px]">
                   <DialogHeader>
                     <DialogTitle>Nouveau fournisseur</DialogTitle>

@@ -216,11 +216,6 @@ function useDashboardData({ days = 90, limit = 5, movLimit = 10 } = {}) {
         error: null,
         payload,
       });
-
-      console.log(
-        "✅ Données dashboard chargées:",
-        payload.stock_alerts.length
-      );
     } catch (err: any) {
       console.error("❌ Erreur chargement dashboard:", err);
 
@@ -332,7 +327,7 @@ export default function Dashboard() {
 
               <div className="flex items-center space-x-4">
                 {/* Informations utilisateur */}
-                <div className="flex items-center space-x-2 text-sm text-gray-600 dark:text-gray-300">
+                <div className="flex items-center ml-8 lg:ml-0 space-x-2 text-sm text-gray-600 dark:text-gray-300">
                   <User className="h-4 w-4" />
                   <span>{session.user?.name}</span>
                   <Badge variant="secondary" className="text-xs">

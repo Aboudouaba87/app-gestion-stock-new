@@ -506,10 +506,10 @@ export default function StocksPage() {
       <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900 dark:text-white">
         <Sidebar />
 
-        <div className="flex-1 flex flex-col">
+        <div className="flex-1 flex flex-col overflow-auto">
           {/* Header */}
           <header className="bg-white border-b border-gray-200 px-6 py-4 dark:bg-gray-900 dark:text-white">
-            <div className="flex items-center justify-between">
+            <div className="flex-1 md:flex items-center justify-between">
               <div className="ml-10 lg:ml-0">
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-300">
                   Gestion des Stocks
@@ -518,14 +518,25 @@ export default function StocksPage() {
                   Suivez et gérez vos mouvements de stock
                 </p>
               </div>
-              <div className="flex space-x-2">
+              <div className="flex md:flex-1 justify-between mt-1 md:mt-0 space-x-2">
                 <Dialog open={isTransferOpen} onOpenChange={setIsTransferOpen}>
-                  <DialogTrigger asChild>
-                    <Button variant="outline">
-                      <ArrowRightLeft className="h-4 w-4 mr-2" />
-                      Transfert
-                    </Button>
-                  </DialogTrigger>
+                  {/* Bouton mobile */}
+                  <div className="md:hidden mr-0 pr-0 ml-2 mb-1">
+                    <DialogTrigger asChild>
+                      <Button variant="outline">
+                        <ArrowRightLeft className="h-4 w-4 mr-2" />
+                      </Button>
+                    </DialogTrigger>
+                  </div>
+                  {/* Bouton Ordinateurs */}
+                  <div className="hidden md:block">
+                    <DialogTrigger asChild>
+                      <Button variant="outline">
+                        <ArrowRightLeft className="h-4 w-4 mr-2" />
+                        Transfert
+                      </Button>
+                    </DialogTrigger>
+                  </div>
                   <DialogContent className="max-w-md">
                     <DialogHeader>
                       <DialogTitle>Transfert entre entrepôts</DialogTitle>
@@ -681,12 +692,23 @@ export default function StocksPage() {
                   open={isAdjustmentOpen}
                   onOpenChange={setIsAdjustmentOpen}
                 >
-                  <DialogTrigger asChild>
-                    <Button variant="outline">
-                      <ArrowUpDown className="h-4 w-4 mr-2" />
-                      Ajustement
-                    </Button>
-                  </DialogTrigger>
+                  {/* Bouton Mobile */}
+                  <div className="md:hidden mr-0 pr-0 mb-1">
+                    <DialogTrigger asChild>
+                      <Button variant="outline">
+                        <ArrowUpDown className="h-4 w-4 mr-2" />
+                      </Button>
+                    </DialogTrigger>
+                  </div>
+                  {/* Bouton ordinateurs */}
+                  <div className="hidden md:block">
+                    <DialogTrigger asChild>
+                      <Button variant="outline">
+                        <ArrowUpDown className="h-4 w-4 mr-2" />
+                        Ajustement
+                      </Button>
+                    </DialogTrigger>
+                  </div>
                   <DialogContent className="max-w-md">
                     <DialogHeader>
                       <DialogTitle>Ajustement de stock</DialogTitle>
@@ -835,12 +857,23 @@ export default function StocksPage() {
                   open={isNewMovementOpen}
                   onOpenChange={setIsNewMovementOpen}
                 >
-                  <DialogTrigger asChild>
-                    <Button className="bg-blue-600 hover:bg-blue-700">
-                      <Plus className="h-4 w-4 mr-2" />
-                      Nouveau mouvement
-                    </Button>
-                  </DialogTrigger>
+                  {/* Bouton mobile */}
+                  <div className="md:hidden mr-0 pr-0">
+                    <DialogTrigger asChild>
+                      <Button className="bg-blue-600 hover:bg-blue-700">
+                        <Plus className="h-4 w-4 mr-2" />
+                      </Button>
+                    </DialogTrigger>
+                  </div>
+                  {/* Bouton ordinateurs */}
+                  <div className="hidden md:block">
+                    <DialogTrigger asChild>
+                      <Button className="bg-blue-600 hover:bg-blue-700">
+                        <Plus className="h-4 w-4 mr-2" />
+                        Nouveau mouvement
+                      </Button>
+                    </DialogTrigger>
+                  </div>
                   <DialogContent className="max-w-md">
                     <DialogHeader>
                       <DialogTitle>Nouveau mouvement de stock</DialogTitle>
@@ -1232,7 +1265,7 @@ export default function StocksPage() {
                 </Table>
               </CardContent>
               {/* AJOUT: Composant de pagination */}
-              <div className="flex items-center justify-between px-6 py-4 border-t">
+              <div className="flex items-center justify-between px-6 py-4 border-t overflow-auto">
                 <div className="text-sm text-gray-600 dark:text-gray-300">
                   Affichage de {startIndex + 1} à{" "}
                   {Math.min(

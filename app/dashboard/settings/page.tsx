@@ -358,49 +358,6 @@ export default function SettingsPage() {
     }
   };
 
-  // const changePassword = async () => {
-  //   if (passwordData.newPassword !== passwordData.confirmPassword) {
-  //     toast.error("Les mots de passe ne correspondent pas");
-  //     return;
-  //   }
-
-  //   if (passwordData.newPassword.length < 8) {
-  //     toast.error("Le mot de passe doit contenir au moins 8 caractères");
-  //     return;
-  //   }
-
-  //   try {
-  //     setSaving(true);
-  //     const res = await fetch("/api/auth/change-password", {
-  //       method: "POST",
-  //       headers: { "Content-Type": "application/json" },
-  //       body: JSON.stringify({
-  //         currentPassword: passwordData.currentPassword,
-  //         newPassword: passwordData.newPassword,
-  //       }),
-  //     });
-
-  //     if (res.ok) {
-  //       toast.success("Mot de passe changé avec succès");
-  //       setPasswordData({
-  //         currentPassword: "",
-  //         newPassword: "",
-  //         confirmPassword: "",
-  //       });
-  //     } else {
-  //       const error = await res.json();
-  //       throw new Error(
-  //         error.message || "Erreur lors du changement de mot de passe"
-  //       );
-  //     }
-  //   } catch (error: any) {
-  //     console.error("Erreur:", error);
-  //     toast.error(error.message || "Erreur lors du changement de mot de passe");
-  //   } finally {
-  //     setSaving(false);
-  //   }
-  // };
-
   const changePassword = async () => {
     if (passwordData.newPassword !== passwordData.confirmPassword) {
       toast.error("Les mots de passe ne correspondent pas");
@@ -486,26 +443,6 @@ export default function SettingsPage() {
       toast.success("Tous les paramètres ont été sauvegardés");
     }
   };
-
-  // const handleManualBackup = async () => {
-  //   try {
-  //     setSaving(true);
-  //     const res = await fetch("/api/settings/backup/manual", {
-  //       method: "POST",
-  //     });
-
-  //     if (res.ok) {
-  //       toast.success("Sauvegarde manuelle lancée");
-  //     } else {
-  //       throw new Error("Erreur lors de la sauvegarde manuelle");
-  //     }
-  //   } catch (error: any) {
-  //     console.error("Erreur:", error);
-  //     toast.error(error.message || "Erreur lors de la sauvegarde");
-  //   } finally {
-  //     setSaving(false);
-  //   }
-  // };
 
   const handleManualBackup = async () => {
     try {
@@ -605,10 +542,10 @@ export default function SettingsPage() {
       <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900">
         <Sidebar />
 
-        <div className="flex-1 flex flex-col">
+        <div className="flex-1 flex flex-col overflow-auto">
           {/* Header */}
           <header className="bg-white border-b border-gray-200 px-6 py-4 dark:bg-gray-900">
-            <div className="flex items-center justify-between">
+            <div className="flex-1 md:flex items-center justify-between">
               <div className="ml-10 lg:ml-0">
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-300">
                   Paramètres
@@ -617,25 +554,27 @@ export default function SettingsPage() {
                   Configurez votre application
                 </p>
               </div>
-              <Button
-                onClick={handleSaveAll}
-                disabled={saving}
-                className="bg-blue-600 hover:bg-blue-700"
-              >
-                {saving ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                ) : (
-                  <Save className="h-4 w-4 mr-2" />
-                )}
-                {saving ? "Sauvegarde..." : "Sauvegarder tout"}
-              </Button>
+              <div className="px-4">
+                <Button
+                  onClick={handleSaveAll}
+                  disabled={saving}
+                  className="bg-blue-600 hover:bg-blue-700 min-w-full"
+                >
+                  {saving ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Save className="h-4 w-4 mr-2" />
+                  )}
+                  {saving ? "Sauvegarde..." : "Sauvegarder tout"}
+                </Button>
+              </div>
             </div>
           </header>
 
           {/* Main Content */}
           <main className="flex-1 p-6">
             <Tabs defaultValue="general" className="space-y-6">
-              <TabsList className="grid w-full grid-cols-6">
+              <TabsList className="grid w-full  grid-cols-3 lg:grid-cols-6">
                 <TabsTrigger value="general">Général</TabsTrigger>
                 <TabsTrigger value="notifications">Notifications</TabsTrigger>
                 <TabsTrigger value="security">Sécurité</TabsTrigger>

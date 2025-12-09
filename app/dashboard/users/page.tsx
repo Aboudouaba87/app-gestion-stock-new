@@ -529,10 +529,10 @@ export default function UsersPage() {
       <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900">
         <Sidebar />
 
-        <div className="flex-1 flex flex-col">
+        <div className="flex-1 flex flex-col overflow-auto">
           {/* Header */}
           <header className="bg-white border-b border-gray-200 px-6 py-4 dark:bg-gray-900 ">
-            <div className="flex items-center justify-between">
+            <div className="flex-1 md:flex items-center justify-between">
               <div className="ml-10 lg:ml-0">
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-300">
                   Utilisateurs
@@ -546,12 +546,14 @@ export default function UsersPage() {
                 open={isCreateModalOpen}
                 onOpenChange={setIsCreateModalOpen}
               >
-                <DialogTrigger asChild>
-                  <Button className="bg-blue-600 hover:bg-blue-700">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Nouvel utilisateur
-                  </Button>
-                </DialogTrigger>
+                <div className="flex lg:flex-1 justify-center justify-items-end mt-1 lg:mt-0">
+                  <DialogTrigger asChild>
+                    <Button className="bg-blue-600 hover:bg-blue-700">
+                      <Plus className="h-4 w-4 mr-2" />
+                      Nouvel utilisateur
+                    </Button>
+                  </DialogTrigger>
+                </div>
 
                 <DialogContent className="sm:max-w-[425px]">
                   <DialogHeader>
@@ -909,24 +911,22 @@ export default function UsersPage() {
                 ) : (
                   <>
                     {/* Table for medium+ screens */}
-                    <div className="hidden md:block overflow-x-auto">
+                    <div>
                       <Table className="min-w-[900px]">
                         {/* min-w to keep columns readable */}
                         <TableHeader>
                           <TableRow>
                             <TableHead>Utilisateur</TableHead>
                             <TableHead>Email</TableHead>
-                            <TableHead className="hidden lg:table-cell">
+                            <TableHead className="table-cell">
                               Téléphone
                             </TableHead>
                             <TableHead>Rôle</TableHead>
-                            <TableHead className="hidden lg:table-cell">
+                            <TableHead className="table-cell">
                               Entrepôt
                             </TableHead>
-                            <TableHead className="hidden sm:table-cell">
-                              Statut
-                            </TableHead>
-                            <TableHead className="hidden xl:table-cell">
+                            <TableHead className="table-cell">Statut</TableHead>
+                            <TableHead className="table-cell">
                               Dernière connexion
                             </TableHead>
                             <TableHead>Actions</TableHead>
@@ -955,7 +955,7 @@ export default function UsersPage() {
                                 </div>
                               </TableCell>
 
-                              <TableCell className="hidden lg:table-cell">
+                              <TableCell className="table-cell">
                                 <div className="flex items-center gap-2">
                                   <Phone className="h-4 w-4 text-gray-400 dark:text-gray-200" />
                                   <span>{user.phone}</span>
@@ -964,15 +964,15 @@ export default function UsersPage() {
 
                               <TableCell>{getRoleBadge(user.role)}</TableCell>
 
-                              <TableCell className="hidden lg:table-cell">
+                              <TableCell className="table-cell">
                                 {user.warehouse}
                               </TableCell>
 
-                              <TableCell className="hidden sm:table-cell">
+                              <TableCell className="table-cell">
                                 {getStatusBadge(user.status)}
                               </TableCell>
 
-                              <TableCell className="hidden xl:table-cell text-sm text-gray-600 dark:text-gray-300">
+                              <TableCell className="table-cell text-sm text-gray-600 dark:text-gray-300">
                                 {formatDate(user.lastlogin) ?? "Jamais"}
                               </TableCell>
 
@@ -1031,100 +1031,6 @@ export default function UsersPage() {
                           ))}
                         </TableBody>
                       </Table>
-                    </div>
-
-                    {/* Card list for small screens */}
-                    <div className="block md:hidden space-y-3">
-                      {filteredUsers.map((user) => (
-                        <div
-                          key={user.id}
-                          className="bg-white border rounded-lg p-4 shadow-sm"
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                                <User className="h-5 w-5 text-blue-600" />
-                              </div>
-                              <div>
-                                <div className="flex items-center gap-2">
-                                  <div className="font-medium">{user.name}</div>
-                                  <div className="text-xs text-gray-500 dark:text-gray-300">
-                                    • {user.role}
-                                  </div>
-                                </div>
-                                <div className="text-sm text-gray-600  dark:text-gray-300 truncate max-w-[220px]">
-                                  {user.email}
-                                </div>
-                                <div className="text-sm text-gray-500 dark:text-gray-300">
-                                  {user.phone}
-                                </div>
-                              </div>
-                            </div>
-
-                            <div className="flex flex-col items-end gap-2">
-                              <div>{getStatusBadge(user.status)}</div>
-                              <div className="flex items-center gap-1">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleEditUser(user)}
-                                  aria-label={`Modifier ${user.name}`}
-                                >
-                                  <Edit className="h-4 w-4" />
-                                </Button>
-                                <AlertDialog>
-                                  <AlertDialogTrigger asChild>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      aria-label={`Supprimer ${user.name}`}
-                                    >
-                                      <Trash2 className="h-4 w-4" />
-                                    </Button>
-                                  </AlertDialogTrigger>
-                                  <AlertDialogContent>
-                                    <AlertDialogHeader>
-                                      <AlertDialogTitle>
-                                        Supprimer l'utilisateur
-                                      </AlertDialogTitle>
-                                      <div className="text-sm">
-                                        Êtes-vous sûr de vouloir supprimer
-                                        <strong>{user.name}</strong> ?
-                                      </div>
-                                    </AlertDialogHeader>
-                                    <AlertDialogFooter>
-                                      <AlertDialogCancel>
-                                        Annuler
-                                      </AlertDialogCancel>
-                                      <AlertDialogAction
-                                        onClick={() =>
-                                          handleDeleteUser(user.id)
-                                        }
-                                        className="bg-red-600 hover:bg-red-700"
-                                        disabled={isDeletingId === user.id}
-                                      >
-                                        {isDeletingId === user.id
-                                          ? "Suppression..."
-                                          : "Supprimer"}
-                                      </AlertDialogAction>
-                                    </AlertDialogFooter>
-                                  </AlertDialogContent>
-                                </AlertDialog>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Optional details row (warehouse / lastlogin) */}
-                          <div className="mt-3 flex flex-wrap gap-3 text-sm text-gray-600 dark:text-gray-300">
-                            <div className="px-2 py-1 bg-gray-100 rounded">
-                              {user.warehouse}
-                            </div>
-                            <div className="px-2 py-1 bg-gray-100 rounded">
-                              {formatDate(user.lastlogin) ?? "Jamais connecté"}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
                     </div>
                   </>
                 )}

@@ -965,7 +965,7 @@ export default function ReportsPage() {
         <div className="flex-1 flex flex-col">
           {/* Header */}
           <header className="bg-white border-b border-gray-200 px-6 py-4 dark:bg-gray-900 dark:text-white">
-            <div className="flex items-center justify-between">
+            <div className="flex-1 lg:flex items-center lg:justify-between">
               <div className="ml-10 lg:ml-0">
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-300">
                   Rapports
@@ -974,7 +974,7 @@ export default function ReportsPage() {
                   Analyses et statistiques détaillées - Données en temps réel
                 </p>
               </div>
-              <div className="flex space-x-2">
+              <div className="flex md:flex-1 mt-1 md:mt-1 space-x-2">
                 <Button variant="outline" onClick={handleExportPDF}>
                   <FileText className="h-4 w-4 mr-2" />
                   Exporter PDF
@@ -983,10 +983,12 @@ export default function ReportsPage() {
                   <Download className="h-4 w-4 mr-2" />
                   Exporter Excel
                 </Button>
-                <Button variant="outline" onClick={fetchData}>
-                  <Loader2 className="h-4 w-4 mr-2" />
-                  Actualiser
-                </Button>
+                <div className="hidden lg:block">
+                  <Button variant="outline" onClick={fetchData}>
+                    <Loader2 className="h-4 w-4 mr-2" />
+                    Actualiser
+                  </Button>
+                </div>
               </div>
             </div>
           </header>
