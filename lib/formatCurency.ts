@@ -18,18 +18,22 @@ export function formatCurrency(
 
     // Si la devise n'est pas dans ton JSON, fallback vers Intl
     if (!currency) {
-        return onlySymbol
-            ? code
-            : new Intl.NumberFormat(locale, {
-                style: "currency",
-                currency: code,
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-            }).format(amount);
+        if (onlySymbol) {
+            return code;
+        }
+        if (amount === 0) {
+            return code; // Retourner juste le code pour 0
+        }
+        return new Intl.NumberFormat(locale, {
+            style: "currency",
+            currency: code,
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+        }).format(amount);
     }
 
-    // Si tu veux juste le symbole
-    if (onlySymbol) {
+    // Si tu veux juste le symbole OU si le montant est 0
+    if (onlySymbol || amount === 0) {
         return currency.symbol;
     }
 
@@ -44,4 +48,3 @@ export function formatCurrency(
         ? `${currency.symbol} ${formattedAmount}`
         : `${formattedAmount} ${currency.symbol}`;
 }
-

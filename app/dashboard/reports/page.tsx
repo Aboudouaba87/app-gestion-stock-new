@@ -502,7 +502,6 @@ export default function ReportsPage() {
       });
     }
   };
-
   const handleExportPDF = async () => {
     if (!dashboardData) {
       toast({
@@ -522,13 +521,33 @@ export default function ReportsPage() {
       (w) => w.value === selectedWarehouse
     );
 
-    const formatNumberFR = (num: number) => {
-      return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ");
-    };
+    // Récupérer le symbole de la monnaie
+    const currencySymbol = formatCurrency(0, monnaie);
 
-    const formatEuro = (amount: number) => {
-      // return `€${formatNumberFR(amount)}`;
-      return `${formatCurrency(amount, monnaie)}`;
+    // Fonction SIMPLIFIÉE pour formater les nombres
+    const formatAmount = (amount: number): string => {
+      if (amount === 0) {
+        return currencySymbol; // Retourner juste le symbole pour 0
+      }
+
+      const fixed = Math.abs(amount).toFixed(2);
+      const [integer, decimal] = fixed.split(".");
+
+      // Formater manuellement sans espace insécable
+      let result = "";
+      let count = 0;
+
+      for (let i = integer.length - 1; i >= 0; i--) {
+        result = integer[i] + result;
+        count++;
+        if (count === 3 && i > 0) {
+          result = " " + result; // ESPACE NORMAL
+          count = 0;
+        }
+      }
+
+      const sign = amount < 0 ? "-" : "";
+      return `${sign}${result},${decimal} ${currencySymbol}`;
     };
 
     toast({
@@ -538,19 +557,23 @@ export default function ReportsPage() {
 
     try {
       const { jsPDF } = await import("jspdf");
+
+      // Initialiser avec moins d'options
       const doc = new jsPDF();
 
       const pageWidth = doc.internal.pageSize.getWidth();
       const pageHeight = doc.internal.pageSize.getHeight();
       let yPosition = 20;
 
+      // Titre principal
       doc.setFontSize(20);
       doc.setFont("helvetica", "bold");
       doc.text("RAPPORT STOCKPRO", pageWidth / 2, yPosition, {
         align: "center",
       });
-      yPosition += 15;
+      yPosition += 10;
 
+      // Informations de base
       const periodText = isCustomPeriod
         ? `Du ${customDateRange.start?.toLocaleDateString(
             "fr-FR"
@@ -568,92 +591,135 @@ export default function ReportsPage() {
           ? "Tous les entrepôts"
           : selectedWarehouseObj?.label || selectedWarehouse;
 
-      doc.setFontSize(12);
+      doc.setFontSize(10);
       doc.setFont("helvetica", "normal");
       doc.text(
         `Généré le: ${new Date().toLocaleDateString("fr-FR")}`,
         20,
         yPosition
       );
-      yPosition += 8;
+      yPosition += 6;
       doc.text(`Période: ${periodText}`, 20, yPosition);
-      yPosition += 8;
+      yPosition += 6;
       doc.text(`Entrepôt: ${warehouseText}`, 20, yPosition);
-      yPosition += 20;
+      yPosition += 15;
 
-      doc.setFontSize(16);
+      // Indicateurs clés
+      doc.setFontSize(12);
       doc.setFont("helvetica", "bold");
       doc.text("INDICATEURS CLÉS", 20, yPosition);
-      yPosition += 15;
-
-      doc.setFontSize(11);
-      doc.setFont("helvetica", "normal");
-      const kpiData = [
-        ["Chiffre d'affaires", formatEuro(kpis.revenue)],
-        ["Commandes", kpis.orders.toString()],
-        ["Clients actifs", kpis.clients.toString()],
-        ["Taux de rupture", `${kpis.stockout}%`],
-      ];
-
-      kpiData.forEach(([label, value], index) => {
-        const x = 20 + (index % 2) * 90;
-        const y = yPosition + Math.floor(index / 2) * 15;
-        doc.text(`${label}:`, x, y);
-        doc.setFont("helvetica", "bold");
-        doc.text(value, x + 60, y);
-        doc.setFont("helvetica", "normal");
-      });
-      yPosition += 40;
-
-      doc.setFontSize(16);
-      doc.setFont("helvetica", "bold");
-      doc.text("DONNÉES DE VENTES", 20, yPosition);
-      yPosition += 15;
+      yPosition += 10;
 
       doc.setFontSize(10);
+      doc.setFont("helvetica", "normal");
+
+      // Format KPI plus simple
+      const kpiLines = [
+        ["Chiffre d'affaires:", formatAmount(kpis.revenue)],
+        ["Commandes:", kpis.orders.toString()],
+        ["Clients actifs:", kpis.clients.toString()],
+        ["Taux de rupture:", `${kpis.stockout}%`],
+      ];
+
+      kpiLines.forEach(([label, value], index) => {
+        const x = index < 2 ? 20 : 120;
+        const y = yPosition + (index % 2) * 8;
+        doc.text(label, x, y);
+        doc.setFont("helvetica", "bold");
+        doc.text(value, x + (index < 2 ? 50 : 40), y);
+        doc.setFont("helvetica", "normal");
+      });
+
+      yPosition += 25;
+
+      // Données de ventes - FORMAT TABLEAU SIMPLE
+      doc.setFontSize(12);
       doc.setFont("helvetica", "bold");
+      doc.text("DONNÉES DE VENTES", 20, yPosition);
+      yPosition += 10;
+
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "bold");
+
+      // En-têtes avec devise
       doc.text("Période", 20, yPosition);
-      doc.text(`Ventes (${formatCurrency(0, monnaie)})`, 60, yPosition);
-      doc.text("Commandes", 100, yPosition);
-      doc.text(`Profit (${formatCurrency(0, monnaie)})`, 140, yPosition);
+      doc.text(`Ventes (${currencySymbol})`, 60, yPosition);
+      doc.text("Commandes", 110, yPosition);
+      doc.text(`Profit (${currencySymbol})`, 150, yPosition);
+
+      yPosition += 6;
+      doc.line(20, yPosition, 180, yPosition);
       yPosition += 8;
 
-      doc.line(20, yPosition, 180, yPosition);
-      yPosition += 5;
-
+      // Données
       doc.setFont("helvetica", "normal");
-      salesData.forEach((item) => {
+
+      // Jours dans l'ordre
+      const jours = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
+
+      jours.forEach((jour) => {
         if (yPosition > pageHeight - 30) {
           doc.addPage();
           yPosition = 20;
         }
-        doc.text(item.month, 20, yPosition);
-        doc.text(formatEuro(item.sales), 60, yPosition);
-        doc.text(item.orders.toString(), 100, yPosition);
-        doc.text(formatEuro(item.profit), 140, yPosition);
-        yPosition += 8;
+
+        // Chercher les données
+        const dataForDay = salesData.find((item) =>
+          (item.day || item.month || "")
+            .toLowerCase()
+            .includes(jour.toLowerCase())
+        );
+
+        doc.text(jour, 20, yPosition);
+
+        if (dataForDay && dataForDay.sales > 0) {
+          doc.text(formatAmount(dataForDay.sales), 60, yPosition);
+          doc.text(dataForDay.orders.toString(), 110, yPosition);
+          doc.text(formatAmount(dataForDay.profit), 150, yPosition);
+        } else {
+          // Pour 0, utiliser juste le symbole
+          doc.text(currencySymbol, 60, yPosition);
+          doc.text("0", 110, yPosition);
+          doc.text(currencySymbol, 150, yPosition);
+        }
+
+        yPosition += 7;
       });
-      yPosition += 15;
 
-      if (yPosition > pageHeight - 80) {
-        doc.addPage();
-        yPosition = 20;
-      }
+      yPosition += 10;
 
-      doc.setFontSize(16);
+      // Pied de page page 1
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "normal");
+      doc.text(`Page 1 sur 2`, pageWidth / 2, pageHeight - 10, {
+        align: "center",
+      });
+      doc.text(
+        "StockPro - Rapport généré automatiquement",
+        pageWidth / 2,
+        pageHeight - 5,
+        { align: "center" }
+      );
+
+      // PAGE 2
+      doc.addPage();
+      yPosition = 20;
+
+      // Top produits
+      doc.setFontSize(14);
       doc.setFont("helvetica", "bold");
-      doc.text("TOP PRODUITS", 20, yPosition);
+      doc.text("# TOP PRODUITS", 20, yPosition);
       yPosition += 15;
 
-      doc.setFontSize(10);
+      doc.setFontSize(9);
       doc.setFont("helvetica", "bold");
       doc.text("Produit", 20, yPosition);
-      doc.text("Ventes", 120, yPosition);
-      doc.text(`Revenus (${formatCurrency(0, monnaie)})`, 150, yPosition);
-      yPosition += 8;
+      doc.text("Ventes", 90, yPosition);
+      doc.text(`Revenus (${currencySymbol})`, 130, yPosition);
 
+      yPosition += 6;
       doc.line(20, yPosition, 180, yPosition);
-      yPosition += 5;
+      yPosition += 8;
 
       doc.setFont("helvetica", "normal");
       topProductsData.slice(0, 7).forEach((product) => {
@@ -661,36 +727,35 @@ export default function ReportsPage() {
           doc.addPage();
           yPosition = 20;
         }
-        const productName =
+
+        const name =
           product.name.length > 25
             ? product.name.substring(0, 25) + "..."
             : product.name;
-        doc.text(productName, 20, yPosition);
-        doc.text(product.sales.toString(), 120, yPosition);
-        doc.text(formatEuro(product.revenue), 150, yPosition);
-        yPosition += 8;
+        doc.text(name, 20, yPosition);
+        doc.text(product.sales.toString(), 90, yPosition);
+        doc.text(formatAmount(product.revenue), 130, yPosition);
+
+        yPosition += 7;
       });
-      yPosition += 15;
 
-      if (yPosition > pageHeight - 60) {
-        doc.addPage();
-        yPosition = 20;
-      }
+      yPosition += 10;
 
-      doc.setFontSize(16);
+      // Catégories
+      doc.setFontSize(14);
       doc.setFont("helvetica", "bold");
-      doc.text("RÉPARTITION PAR CATÉGORIE", 20, yPosition);
-      yPosition += 15;
+      doc.text("# REPARTITION PAR CATÉGORIE", 20, yPosition);
+      yPosition += 10;
 
-      doc.setFontSize(10);
+      doc.setFontSize(9);
       doc.setFont("helvetica", "bold");
       doc.text("Catégorie", 20, yPosition);
-      doc.text("Pourcentage", 100, yPosition);
-      doc.text(`Ventes (${formatCurrency(0, monnaie)})`, 140, yPosition);
-      yPosition += 8;
+      doc.text("Pourcentage", 90, yPosition);
+      doc.text(`Ventes (${currencySymbol})`, 130, yPosition);
 
+      yPosition += 6;
       doc.line(20, yPosition, 180, yPosition);
-      yPosition += 5;
+      yPosition += 8;
 
       doc.setFont("helvetica", "normal");
       categoryData.forEach((category) => {
@@ -698,34 +763,41 @@ export default function ReportsPage() {
           doc.addPage();
           yPosition = 20;
         }
+
         doc.text(category.name, 20, yPosition);
-        doc.text(`${category.value}%`, 100, yPosition);
-        doc.text(formatEuro(category.sales), 140, yPosition);
-        yPosition += 8;
+        doc.text(`${category.value}%`, 90, yPosition);
+        doc.text(formatAmount(category.sales), 130, yPosition);
+
+        yPosition += 7;
       });
 
-      const totalPages = doc.internal.getNumberOfPages();
-      for (let i = 1; i <= totalPages; i++) {
-        doc.setPage(i);
-        doc.setFontSize(8);
-        doc.setFont("helvetica", "normal");
-        doc.text(
-          `Page ${i} sur ${totalPages}`,
-          pageWidth / 2,
-          pageHeight - 10,
-          {
-            align: "center",
-          }
-        );
-        doc.text(
-          "StockPro - Rapport généré automatiquement",
-          pageWidth / 2,
-          pageHeight - 5,
-          { align: "center" }
-        );
-      }
+      // Pied de page page 2
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "normal");
+      doc.text(`Page 2 sur 2`, pageWidth / 2, pageHeight - 10, {
+        align: "center",
+      });
+      doc.text(
+        "StockPro - Rapport généré automatiquement",
+        pageWidth / 2,
+        pageHeight - 5,
+        { align: "center" }
+      );
 
-      const fileName = `rapport-stockpro-${selectedPeriod}-${selectedWarehouse}-${
+      // Sauvegarder
+      const periodLabel =
+        selectedPeriod === "week"
+          ? "week"
+          : selectedPeriod === "month"
+          ? "month"
+          : selectedPeriod === "quarter"
+          ? "quarter"
+          : "year";
+
+      const warehouseLabel =
+        selectedWarehouse === "all" ? "all" : selectedWarehouse;
+
+      const fileName = `rapport-stockpro-${periodLabel}-${warehouseLabel}-${
         new Date().toISOString().split("T")[0]
       }.pdf`;
       doc.save(fileName);
@@ -743,7 +815,6 @@ export default function ReportsPage() {
       });
     }
   };
-
   const handleExportExcel = async () => {
     if (!dashboardData) {
       toast({
