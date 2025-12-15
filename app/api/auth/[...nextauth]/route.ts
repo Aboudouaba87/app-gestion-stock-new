@@ -29,6 +29,7 @@ const authOptions: NextAuthOptions = {
                     }
 
                     const user = result.rows[0];
+
                     const isValid = await bcrypt.compare(credentials.password, user.password_hash);
 
                     if (!isValid) {
@@ -42,7 +43,8 @@ const authOptions: NextAuthOptions = {
                         name: user.name,
                         role: user.role || 'user',
                         warehouse: user.warehouse || 'main',
-                        company_id: user.company_id || 1
+                        company_id: user.company_id || 1,
+                        warehouse_id: user.warehouse_id
                     };
                 } catch (error) {
                     console.error("Erreur d'authentification:", error);
@@ -62,6 +64,7 @@ const authOptions: NextAuthOptions = {
                 token.role = user.role;
                 token.warehouse = user.warehouse;
                 token.company_id = user.company_id;
+                token.warehouse_id = user.warehouse_id;
             }
             return token;
         },
@@ -73,6 +76,7 @@ const authOptions: NextAuthOptions = {
                     role: token.role as string,
                     warehouse: token.warehouse as string,
                     company_id: token.company_id as number,
+                    warehouse_id: token.warehouse_id
                 };
             }
             return session;

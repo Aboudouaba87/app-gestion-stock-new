@@ -19,7 +19,7 @@ async function getCurrentUserCompany() {
   const userEmail = session.user.email;
 
   const userResult = await pool.query(
-    "SELECT id, company_id FROM users WHERE email = $1",
+    "SELECT id, company_id, warehouse_id FROM users WHERE email = $1",
     [userEmail]
   );
 
@@ -27,7 +27,7 @@ async function getCurrentUserCompany() {
     throw new Error("Utilisateur non trouvé");
   }
 
-  return userResult.rows[0] as { id: number; company_id: number };
+  return userResult.rows[0] as { id: number; company_id: number, warehouse_id: number };
 }
 
 /* GET : récupérer tous les utilisateurs de la company */
@@ -66,7 +66,9 @@ export async function POST(req: NextRequest) {
     const companyId = user.company_id;
 
     const body = await req.json();
-    const { name, email, phone, role, warehouse, status, password } = body ?? {};
+    const { name, email, phone, role, warehouse, status, password, warehouse_id } = body ?? {};
+
+
 
     if (!name || !email) {
       return NextResponse.json(
@@ -104,9 +106,10 @@ export async function POST(req: NextRequest) {
          warehouse,
          status,
          lastlogin,
-         company_id
+         company_id,
+         warehouse_id
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        RETURNING *`,
       [
         name,
@@ -122,6 +125,7 @@ export async function POST(req: NextRequest) {
           : status ?? "inactive",
         null,
         companyId,
+        warehouse_id
       ]
     );
 
@@ -157,7 +161,7 @@ export async function PUT(req: NextRequest) {
     const companyId = user.company_id;
 
     const body = await req.json();
-    const { id, name, email, password, phone, role, warehouse, status } =
+    const { id, name, email, password, phone, role, warehouse, status, warehouse_id } =
       body ?? {};
 
     if (id === undefined || id === null) {
@@ -221,7 +225,8 @@ export async function PUT(req: NextRequest) {
                status = $6,
                password_hash = $7,
                updated_at = CURRENT_TIMESTAMP
-         WHERE id = $8 AND company_id = $9
+               warehouse_id = $8
+         WHERE id = $9 AND company_id = $10
          RETURNING *`,
         [
           name ?? null,
@@ -231,6 +236,7 @@ export async function PUT(req: NextRequest) {
           warehouse ?? null,
           status ?? null,
           passwordHash,
+          warehouse_id,
           userId,
           companyId,
         ]

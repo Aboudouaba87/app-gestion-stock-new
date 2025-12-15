@@ -60,6 +60,8 @@ import { Client } from "../types/user";
 import { Sale } from "../types/sale";
 import { toast } from "sonner";
 import { RoleGuard } from "../components/auth/role-guard";
+import { useDetermineSympole } from "@/lib/useDetermineSympole";
+import { formatCurrency } from "@/lib/formatCurency";
 
 // Type pour le stock par entrepôt
 type ProductStock = {
@@ -90,9 +92,11 @@ export default function SalesPage() {
   const [isDeleteSaleOpen, setIsDeleteSaleOpen] = useState(false);
   const [isViewSaleOpen, setIsViewSaleOpen] = useState(false);
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
+  const [monnaie, setMonnaie] = useState("XOF");
 
   // === ÉTATS FORMULAIRE ===
   const [newSale, setNewSale] = useState({
+    customer_id: 0,
     customer: "",
     customerEmail: "",
     customerPhone: "",
@@ -134,6 +138,8 @@ export default function SalesPage() {
     }
   }
 
+  // Récupération de la monnaie
+  useDetermineSympole(setMonnaie);
   // Recupération de TVA
   useEffect(() => {
     const fetchTva = async () => {
@@ -432,6 +438,7 @@ export default function SalesPage() {
   const selectClient = (client: Client) => {
     setNewSale({
       ...newSale,
+      customer_id: client.id,
       customer: client.name,
       customerEmail: client.email,
       customerPhone: client.phone ?? "",
@@ -674,6 +681,7 @@ export default function SalesPage() {
 
       // Réinitialiser le formulaire
       setNewSale({
+        customer_id: 0,
         customer: "",
         customerEmail: "",
         customerPhone: "",
@@ -705,7 +713,7 @@ export default function SalesPage() {
           `TTC: ${result.amount?.toLocaleString("fr-FR", {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2,
-          })}€`
+          })}`
       );
     } catch (err: any) {
       console.error("❌ Erreur création vente:", err);
@@ -885,8 +893,11 @@ export default function SalesPage() {
               <tr>
                 <td>${product.name}</td>
                 <td>${product.quantity}</td>
-                <td>€${product.price.toFixed(2)}</td>
-                <td>€${(product.price * product.quantity).toFixed(2)}</td>
+                <td>${formatCurrency(product.price, monnaie)}</td>
+                <td>${formatCurrency(
+                  product.price * product.quantity,
+                  monnaie
+                )}</td>
               </tr>
             `
                 )
@@ -894,17 +905,21 @@ export default function SalesPage() {
             }
             <tr class="total-row">
               <td colspan="3"><strong>Total HT</strong></td>
-              <td><strong>€${(sale.amount / 1.2).toFixed(2)}</strong></td>
+              <td><strong>${formatCurrency(
+                sale.amount / 1.2,
+                monnaie
+              )}</strong></td>
             </tr>
             <tr class="total-row">
               <td colspan="3"><strong>TVA (${sale.tax_rate}%)</strong></td>
-              <td><strong>€${(sale.amount - sale.amount / 1.2).toFixed(
-                2
+              <td><strong>${formatCurrency(
+                sale.amount - sale.amount / 1.2,
+                monnaie
               )}</strong></td>
             </tr>
             <tr class="total-row">
               <td colspan="3"><strong>Total TTC</strong></td>
-              <td><strong>€${sale.amount.toFixed(2)}</strong></td>
+              <td><strong>${formatCurrency(sale.amount, monnaie)}</strong></td>
             </tr>
           </tbody>
         </table>
@@ -1335,8 +1350,11 @@ export default function SalesPage() {
                                               {product.category}
                                             </p>
                                             <p className="text-sm font-medium text-green-600">
-                                              €{product.price} • Stock:{" "}
-                                              {stockInWarehouse}
+                                              {formatCurrency(
+                                                product.price,
+                                                monnaie
+                                              )}{" "}
+                                              • Stock: {stockInWarehouse}
                                             </p>
                                           </div>
                                           <Button size="sm" className="ml-2">
@@ -1383,7 +1401,8 @@ export default function SalesPage() {
                                           {item.name}
                                         </p>
                                         <p className="text-sm text-gray-500 dark:text-gray-300">
-                                          {(item as any).ref} • €{item.price}
+                                          {(item as any).ref} •
+                                          {formatCurrency(item.price, monnaie)}
                                         </p>
                                         {newSale.warehouseId && (
                                           <p className="text-xs text-blue-600">
@@ -1423,15 +1442,30 @@ export default function SalesPage() {
                                 <div className="border-t pt-2 mt-2">
                                   <div className="flex justify-between text-sm">
                                     <span>Sous-total:</span>
-                                    <span>€{calculateTotal().subtotal}</span>
+                                    <span>
+                                      {formatCurrency(
+                                        Number(calculateTotal().subtotal),
+                                        monnaie
+                                      )}
+                                    </span>
                                   </div>
                                   <div className="flex justify-between text-sm">
                                     <span>TVA ({taxRate}%):</span>
-                                    <span>€{calculateTotal().tax}</span>
+                                    <span>
+                                      {formatCurrency(
+                                        Number(calculateTotal().tax),
+                                        monnaie
+                                      )}
+                                    </span>
                                   </div>
                                   <div className="flex justify-between font-bold">
                                     <span>Total:</span>
-                                    <span>€{calculateTotal().total}</span>
+                                    <span>
+                                      {formatCurrency(
+                                        Number(calculateTotal().total),
+                                        monnaie
+                                      )}
+                                    </span>
                                   </div>
                                 </div>
                               </div>
@@ -1498,11 +1532,7 @@ export default function SalesPage() {
                         CA du mois
                       </p>
                       <p className="text-2xl font-bold">
-                        €
-                        {Number(stats.totalRevenue).toLocaleString("fr-FR", {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        })}
+                        {formatCurrency(stats.totalRevenue, monnaie)}
                       </p>
                     </div>
                     <Euro className="h-8 w-8 text-green-600" />
@@ -1530,13 +1560,14 @@ export default function SalesPage() {
                         Panier moyen
                       </p>
                       <p className="text-2xl font-bold">
-                        €
-                        {isNaN(stats.averageOrder)
-                          ? "0,00"
-                          : Number(stats.averageOrder).toLocaleString("fr-FR", {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            })}
+                        {formatCurrency(
+                          Number(
+                            isNaN(stats.averageOrder)
+                              ? "0,00"
+                              : Number(stats.averageOrder)
+                          ),
+                          monnaie
+                        )}
                       </p>
                     </div>
                     <div className="h-8 w-8 bg-purple-100 rounded-full flex items-center justify-center">
@@ -1659,11 +1690,7 @@ export default function SalesPage() {
                           </div>
                         </TableCell>
                         <TableCell className="font-medium">
-                          €
-                          {(sale.amount || 0).toLocaleString("fr-FR", {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          })}
+                          {formatCurrency(sale.amount || 0, monnaie)}
                         </TableCell>
                         <TableCell>{sale.items}</TableCell>
                         <TableCell>{getStatusBadge(sale.status)}</TableCell>
@@ -1729,11 +1756,15 @@ export default function SalesPage() {
                                                 {product.quantity}
                                               </span>
                                               <span>
-                                                €
-                                                {(
-                                                  product.price *
-                                                  product.quantity
-                                                ).toFixed(2)}
+                                                {formatCurrency(
+                                                  Number(
+                                                    (
+                                                      product.price *
+                                                      product.quantity
+                                                    ).toFixed(2)
+                                                  ),
+                                                  monnaie
+                                                )}
                                               </span>
                                             </div>
                                           )
@@ -1742,29 +1773,41 @@ export default function SalesPage() {
                                           <div className="flex justify-between text-sm">
                                             <span>Sous-total HT:</span>
                                             <span>
-                                              €
-                                              {Number(
-                                                selectedSale.amount / 1.2
-                                              ).toFixed(2)}
+                                              {formatCurrency(
+                                                Number(
+                                                  Number(
+                                                    selectedSale.amount / 1.2
+                                                  ).toFixed(2)
+                                                ),
+                                                monnaie
+                                              )}
                                             </span>
                                           </div>
                                           <div className="flex justify-between text-sm">
                                             <span>TVA ({tva[0]?.taux}%):</span>
                                             <span>
-                                              €
-                                              {Number(
-                                                selectedSale.amount -
-                                                  selectedSale.amount / 1.2
-                                              ).toFixed(2)}
+                                              {formatCurrency(
+                                                Number(
+                                                  Number(
+                                                    selectedSale.amount -
+                                                      selectedSale.amount / 1.2
+                                                  ).toFixed(2)
+                                                ),
+                                                monnaie
+                                              )}
                                             </span>
                                           </div>
                                           <div className="border-t pt-1 font-bold flex justify-between">
                                             <span>Total TTC:</span>
                                             <span>
-                                              €
-                                              {Number(
-                                                selectedSale.amount
-                                              ).toFixed(2)}
+                                              {formatCurrency(
+                                                Number(
+                                                  Number(
+                                                    selectedSale.amount
+                                                  ).toFixed(2)
+                                                ),
+                                                monnaie
+                                              )}
                                             </span>
                                           </div>
                                         </div>

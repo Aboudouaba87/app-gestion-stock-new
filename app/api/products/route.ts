@@ -66,6 +66,7 @@ export async function POST(request: NextRequest) {
       name,
       reference,
       category,
+      category_id,
       stock,
       price,
       cost_price = null, // 🔥 AJOUT
@@ -74,6 +75,8 @@ export async function POST(request: NextRequest) {
       description,
       warehouse_id,
     } = body ?? {};
+
+
 
     if (!name || !reference) {
       return NextResponse.json(
@@ -114,8 +117,8 @@ export async function POST(request: NextRequest) {
     const insertProduct = await client.query(
       `INSERT INTO products (
         user_id, name, reference, category, stock, price,
-        cost_price, supplier, description, status, company_id, created_at, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW())
+        cost_price, supplier, description, status, company_id, created_at, updated_at, category_id
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW(), $12)
       RETURNING *`,
       [
         user.id,
@@ -129,6 +132,7 @@ export async function POST(request: NextRequest) {
         description,
         status,
         user.company_id,
+        category_id
       ]
     );
 
@@ -159,14 +163,14 @@ export async function POST(request: NextRequest) {
       await client.query(
         `INSERT INTO product_warehouses (
            product_id, warehouse_value, company_id,
-           stock, reserved, last_updated
+           stock, reserved, last_updated, warehouse_id
          )
-         VALUES ($1, $2, $3, $4, $5, NOW())
+         VALUES ($1, $2, $3, $4, $5, NOW(),$6)
          ON CONFLICT (product_id, warehouse_value, company_id) DO UPDATE
          SET stock = EXCLUDED.stock,
              reserved = EXCLUDED.reserved,
              last_updated = NOW()`,
-        [newProduct.id, warehouseRow.value, user.company_id, initialStock, 0]
+        [newProduct.id, warehouseRow.value, user.company_id, initialStock, 0, user.warehouse_id]
       );
 
       // stock_movements: mouvement d'entrée initial

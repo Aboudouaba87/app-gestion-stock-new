@@ -509,8 +509,8 @@ export default function StocksPage() {
         <div className="flex-1 flex flex-col overflow-auto">
           {/* Header */}
           <header className="bg-white border-b border-gray-200 px-6 py-4 dark:bg-gray-900 dark:text-white">
-            <div className="flex-1 md:flex items-center justify-between">
-              <div className="ml-10 lg:ml-0">
+            <div className="flex flex-col md:flex-row items-center justify-between w-full">
+              <div className="ml-10 md:ml-0">
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-300">
                   Gestion des Stocks
                 </h1>
@@ -518,7 +518,7 @@ export default function StocksPage() {
                   Suivez et gérez vos mouvements de stock
                 </p>
               </div>
-              <div className="flex md:flex-1 justify-between mt-1 md:mt-0 space-x-2">
+              <div className="flex   mt-1 md:mt-0 space-x-2">
                 <Dialog open={isTransferOpen} onOpenChange={setIsTransferOpen}>
                   {/* Bouton mobile */}
                   <div className="md:hidden mr-0 pr-0 ml-2 mb-1">

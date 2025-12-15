@@ -4,6 +4,7 @@ export type Product = {
   name: string
   reference: string
   category: string
+  category_id: number
   stock: number
   price: number
   supplier: string

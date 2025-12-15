@@ -21,6 +21,7 @@ export async function getCurrentUser() {
         warehouse: session.user.warehouse || 'main',
         name: session.user.name || '',
         email: session.user.email || '',
+        warehouse_id: session.user.warehouse_id || ''
     };
 }
 
@@ -32,6 +33,7 @@ export async function getCurrentUserCompany() {
     }
 
     const companyId = Number(session.user.company_id);
+    const warehouseyId = Number(session.user.warehouse_id);
 
     if (!companyId || Number.isNaN(companyId)) {
         return null;
@@ -44,5 +46,6 @@ export async function getCurrentUserCompany() {
         role: session.user.role || 'user',
         warehouse: session.user.warehouse || 'main',
         company_id: companyId,
+        warehouse_id: warehouseyId
     };
 }

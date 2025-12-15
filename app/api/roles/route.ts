@@ -33,15 +33,3 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
-
-
-// SELECT
-//         r.value,
-//         r.label,
-//         COALESCE(urp.custom_color, r.default_color) AS color
-//       FROM roles r
-//       LEFT JOIN user_role_preferences urp
-//         ON urp.custom_color = r.value
-//        AND urp.user_id = $1
-//        AND urp.company_id = $2
-//       WHERE r.company_id = $2

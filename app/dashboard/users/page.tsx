@@ -12,7 +12,9 @@ import {
   Mail,
   Phone,
   X,
+  Warehouse,
 } from "lucide-react";
+
 import { Input } from "@/app/dashboard/components/ui/input";
 import { Button } from "@/app/dashboard/components/ui/button";
 import {
@@ -43,7 +45,6 @@ import {
   AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
-  AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
@@ -64,17 +65,24 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/app/dashboard/components/ui/collapsible";
+
 import { AppUser, NewUser, EditUser } from "../types/user";
 import { RoleGuard } from "../components/auth/role-guard";
 
-const warehouses = [
-  { value: "main", label: "Entrepôt Principal" },
-  { value: "south", label: "Entrepôt Sud" },
-  { value: "north", label: "Entrepôt Nord" },
-];
+// Types locaux (ajuste si tu as déjà Role ailleurs)
+type Role = {
+  value: string;
+  label: string;
+  color?: string; // classe CSS éventuelle
+};
+
+type Warehouse = {
+  id: number;
+  label: string;
+  value?: string; // optionnel si ton API le renvoie
+};
 
 /* ---------- small helpers/hooks ---------- */
-
 function useDebounce<T>(value: T, delay = 250) {
   const [debounced, setDebounced] = useState(value);
   useEffect(() => {
@@ -88,28 +96,34 @@ const isValidEmail = (email: string) =>
   /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
 /* ---------- main component ---------- */
-
 export default function UsersPage() {
+  const { toast } = useToast();
+
+  // UI state
   const [searchTerm, setSearchTerm] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [open, setOpen] = useState(false);
 
+  // Data state
+  const [users, setUsers] = useState<AppUser[]>([]);
+  const [roles, setRoles] = useState<Role[]>([]);
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+
+  // Dialog state
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<AppUser | null>(null);
 
-  const [users, setUsers] = useState<AppUser[]>([]);
-  const [roles, setRoles] = useState<Role[]>([]); // ✅ dynamique
-  const [loadingRoles, setLoadingRoles] = useState(true);
-  const [open, setOpen] = useState(false);
-
+  // Form state
   const [newUser, setNewUser] = useState<NewUser>({
     name: "",
     email: "",
     password: "",
     phone: "",
     role: "",
-    warehouse: "",
+    warehouse: "", // ✅ pas null
+    warehouse_id: 0, // ✅ pas null
     status: true,
     lastlogin: null,
   });
@@ -122,37 +136,59 @@ export default function UsersPage() {
     role: "",
     warehouse: "",
     status: true,
+    warehouse_id: 0,
   });
 
+  // Flags
+  const [loadingRoles, setLoadingRoles] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
-
   const [isCreating, setIsCreating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeletingId, setIsDeletingId] = useState<number | null>(null);
-
-  const { toast } = useToast();
 
   /* ---------- fetch roles ---------- */
   useEffect(() => {
     const fetchRoles = async () => {
       try {
-        const res = await fetch("/api/roles", {
-          cache: "no-store",
-        });
+        const res = await fetch("/api/roles", { cache: "no-store" });
         if (!res.ok) throw new Error("Erreur API rôles");
         const data: Role[] = await res.json();
         setRoles(data);
       } catch (err) {
         console.error("Erreur fetch roles :", err);
+        toast({
+          title: "Erreur",
+          description: "Impossible de charger les rôles",
+          variant: "destructive",
+        });
       } finally {
         setLoadingRoles(false);
       }
     };
     fetchRoles();
-  }, []);
+  }, [toast]);
 
-  console.log("Le roles est : ", roles);
+  /* ---------- fetch warehouses ---------- */
+  const loadWarehouses = useCallback(async () => {
+    try {
+      const res = await fetch("/api/warehouses", { cache: "no-store" });
+      if (!res.ok) throw new Error(`Erreur API entrepôts ${res.status}`);
+      const data: Warehouse[] = await res.json();
+      setWarehouses(data);
+    } catch (err: any) {
+      console.error("Erreur fetch warehouses:", err);
+      toast({
+        title: "Erreur",
+        description: err.message || "Erreur lors du chargement des entrepôts",
+        variant: "destructive",
+      });
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    loadWarehouses();
+  }, [loadWarehouses]);
 
   /* ---------- load users (with AbortController) ---------- */
   useEffect(() => {
@@ -183,7 +219,6 @@ export default function UsersPage() {
     };
 
     load();
-
     return () => {
       mounted = false;
       ac.abort();
@@ -212,7 +247,6 @@ export default function UsersPage() {
     const total = users.length;
     const active = users.filter((u) => u.status === "active").length;
     const admins = users.filter((u) => u.role === "admin").length;
-    // example: todayConnected based on today's date not hardcoded
     const today = new Date().toISOString().slice(0, 10); // "YYYY-MM-DD"
     const todayConnected = users.filter(
       (u) => u.lastlogin && u.lastlogin.startsWith(today)
@@ -235,11 +269,16 @@ export default function UsersPage() {
     });
   }, [toast]);
 
-  /* ---------- helpers for badges ---------- */
-  const getRoleBadge = useCallback((role: string) => {
-    const roleInfo = roles.find((r) => r.value === role);
-    return <Badge className={roleInfo?.color}>{roleInfo?.label}</Badge>;
-  }, []);
+  /* ---------- helpers ---------- */
+  const getRoleBadge = useCallback(
+    (role: string) => {
+      const roleInfo = roles.find((r) => r.value === role);
+      return (
+        <Badge className={roleInfo?.color}>{roleInfo?.label ?? role}</Badge>
+      );
+    },
+    [roles]
+  );
 
   const getStatusBadge = useCallback((status: string) => {
     return status === "active" ? (
@@ -249,15 +288,31 @@ export default function UsersPage() {
     );
   }, []);
 
+  const formatDate = (targetDate1?: string | null): string | null => {
+    if (!targetDate1) return null;
+    const targetDate = new Date(targetDate1);
+    const today = new Date();
+    const daysOnly = (d: Date) =>
+      new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+    const diffDays =
+      (daysOnly(targetDate) - daysOnly(today)) / (1000 * 60 * 60 * 24);
+    if (diffDays === 0) return "Aujourd'hui";
+    if (diffDays === -1) return "Hier";
+    if (diffDays >= -6 && diffDays <= -2) {
+      return targetDate.toLocaleDateString("fr-FR", { weekday: "long" });
+    }
+    return targetDate.toLocaleDateString("fr-FR");
+  };
+
   /* ---------- create user ---------- */
   const isCreateFormValid = useMemo(() => {
     return (
       newUser.name.trim() !== "" &&
       newUser.email.trim() !== "" &&
+      isValidEmail(newUser.email) &&
       newUser.phone.trim() !== "" &&
       newUser.role !== "" &&
-      newUser.warehouse !== "" &&
-      isValidEmail(newUser.email)
+      newUser.warehouse_id !== 0 // ✅ vérifie bien l’ID
     );
   }, [newUser]);
 
@@ -271,15 +326,14 @@ export default function UsersPage() {
       return;
     }
 
-    const warehouseLabel =
-      warehouses.find((w) => w.value === newUser.warehouse)?.label || "";
     const payload = {
       name: newUser.name,
       email: newUser.email,
       password: newUser.password,
       phone: newUser.phone,
       role: newUser.role,
-      warehouse: warehouseLabel,
+      warehouse: newUser.warehouse,
+      warehouse_id: newUser.warehouse_id,
       status: newUser.status ? "active" : "inactive",
     };
 
@@ -296,22 +350,18 @@ export default function UsersPage() {
       }
       const created: AppUser = await res.json();
 
-      // functional update to avoid stale state
-      // setUsers((prev) => [...prev, created]);
-      const reloadUsers = async () => {
-        setSearchTerm(""); // important
-        try {
-          const res = await fetch("/api/users");
-          if (!res.ok)
-            throw new Error("Erreur au rechargement des utilisateurs");
-          const data: AppUser[] = await res.json();
-          setUsers(data);
-        } catch (err) {
-          console.error("Reload users error:", err);
-        }
-      };
-      await reloadUsers();
+      // Reload to reflect server state
+      try {
+        const resUsers = await fetch("/api/users");
+        if (!resUsers.ok)
+          throw new Error("Erreur au rechargement des utilisateurs");
+        const data: AppUser[] = await resUsers.json();
+        setUsers(data);
+      } catch (err) {
+        console.error("Reload users error:", err);
+      }
 
+      // Reset form
       setNewUser({
         name: "",
         email: "",
@@ -321,8 +371,10 @@ export default function UsersPage() {
         warehouse: "",
         status: true,
         lastlogin: null,
+        warehouse_id: 0,
       });
       setIsCreateModalOpen(false);
+
       toast({
         title: "Utilisateur créé",
         description: `${created.name} ajouté`,
@@ -340,46 +392,28 @@ export default function UsersPage() {
   }, [isCreateFormValid, newUser, toast]);
 
   /* ---------- edit user ---------- */
-  // const handleEditUser = useCallback((user: AppUser) => {
-  //   setEditingUser(user);
-  //   setEditUser({
-  //     name: user.name,
-  //     email: user.email,
-  //     password: user.password,
-  //     phone: user.phone,
-  //     role: user.role,
-  //     warehouse:
-  //       warehouses.find((w) => w.label === user.warehouse)?.value || "",
-  //     status: user.status === "active",
-  //   });
-  //   setIsEditModalOpen(true);
-  // }, []);
-  const handleEditUser = useCallback((user: AppUser) => {
-    setEditingUser(user);
-    setEditUser({
-      name: user.name ?? "",
-      email: user.email ?? "",
-      phone: user.phone ?? "",
-      role: user.role ?? "",
-      warehouse:
-        warehouses.find((w) => w.label === user.warehouse)?.value || "",
-      status: user.status === "active",
-      password: "", // ← champ éditable, vide par défaut
-    });
-    setIsEditModalOpen(true);
-  }, []);
+  const handleEditUser = useCallback(
+    (user: AppUser) => {
+      setEditingUser(user);
 
-  // const isEditFormValid = useMemo(() => {
-  //   return (
-  //     editUser.name.trim() !== "" &&
-  //     editUser.email.trim() !== "" &&
-  //     editUser.password.trim() !== "" &&
-  //     editUser.phone.trim() !== "" &&
-  //     editUser.role !== "" &&
-  //     editUser.warehouse !== "" &&
-  //     isValidEmail(editUser.email)
-  //   );
-  // }, [editUser]);
+      // Trouver l'entrepôt correspondant pour initialiser warehouse_id et label
+      const wMatch = warehouses.find((w) => w.label === user.warehouse);
+      console.log();
+
+      setEditUser({
+        name: user.name ?? "",
+        email: user.email ?? "",
+        phone: user.phone ?? "",
+        role: user.role ?? "",
+        warehouse: wMatch?.label ?? user.warehouse ?? "",
+        status: user.status === "active",
+        password: "",
+        warehouse_id: wMatch?.id ?? 0,
+      });
+      setIsEditModalOpen(true);
+    },
+    [warehouses]
+  );
 
   const isEditFormValid = useMemo(() => {
     const name = editUser.name ?? "";
@@ -387,6 +421,7 @@ export default function UsersPage() {
     const phone = editUser.phone ?? "";
     const role = editUser.role ?? "";
     const warehouse = editUser.warehouse ?? "";
+    const warehouse_id = editUser.warehouse_id ?? 0;
 
     return (
       name.trim() !== "" &&
@@ -394,12 +429,14 @@ export default function UsersPage() {
       phone.trim() !== "" &&
       role !== "" &&
       warehouse !== "" &&
+      warehouse_id !== 0 &&
       isValidEmail(email)
     );
   }, [editUser]);
 
   const handleSaveEdit = useCallback(async () => {
     if (!editingUser) return;
+
     if (!isEditFormValid) {
       toast({
         title: "Erreur de validation",
@@ -418,8 +455,8 @@ export default function UsersPage() {
         password: editUser.password,
         phone: editUser.phone,
         role: editUser.role,
-        warehouse:
-          warehouses.find((w) => w.value === editUser.warehouse)?.label || "",
+        warehouse: editUser.warehouse,
+        warehouse_id: editUser.warehouse_id,
         status: editUser.status ? "active" : "inactive",
       };
 
@@ -438,6 +475,7 @@ export default function UsersPage() {
       setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
       setIsEditModalOpen(false);
       setEditingUser(null);
+
       toast({
         title: "Utilisateur modifié",
         description: `${updated.name} mis à jour`,
@@ -460,7 +498,6 @@ export default function UsersPage() {
       const toRemove = users.find((u) => u.id === id);
       if (!toRemove) return;
 
-      // optimistic update
       const previous = users;
       setUsers((prev) => prev.filter((u) => u.id !== id));
       setIsDeletingId(id);
@@ -479,8 +516,7 @@ export default function UsersPage() {
         toast({ title: "Supprimé", description: `${deleted.name} supprimé` });
       } catch (err: any) {
         console.error("Delete error:", err);
-        // rollback
-        setUsers(previous);
+        setUsers(previous); // rollback
         toast({
           title: "Erreur",
           description: err.message ?? "Impossible de supprimer",
@@ -493,42 +529,15 @@ export default function UsersPage() {
     [users, toast]
   );
 
-  // Fonction pour afficher la date de la dernière connection
-  function daysDiff(date1: any, date2: any) {
-    const d1Converi = new Date(date1);
-    const d2Converi = new Date(date2);
-    const d1: any = new Date(
-      d1Converi.getFullYear(),
-      d1Converi.getMonth(),
-      d1Converi.getDate()
-    );
-    const d2: any = new Date(
-      d2Converi.getFullYear(),
-      d2Converi.getMonth(),
-      d2Converi.getDate()
-    );
-    const diff = (d1 - d2) / (1000 * 60 * 60 * 24);
-    return diff;
-  }
-  function formatDate(targetDate1: any): string | null {
-    if (!targetDate1) return null;
-    const targetDate = new Date(targetDate1);
-    const today = new Date();
-    const diff = daysDiff(targetDate, today);
-    if (diff === 0) return "Aujourd'hui";
-    if (diff === -1) return "Hier";
-    if (diff >= -6 && diff <= -2) {
-      return targetDate?.toLocaleDateString("fr-FR", { weekday: "long" });
-    }
-    return targetDate?.toLocaleDateString("fr-FR");
-  }
+  console.log("warehouse est : ", newUser.warehouse);
+  console.log("warehouse id est : ", newUser.warehouse_id);
+  console.log("les warehouses sont : ", warehouses);
 
   /* ---------- JSX ---------- */
   return (
     <RoleGuard allowedRoles={["admin"]}>
       <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900">
         <Sidebar />
-
         <div className="flex-1 flex flex-col overflow-auto">
           {/* Header */}
           <header className="bg-white border-b border-gray-200 px-6 py-4 dark:bg-gray-900 ">
@@ -546,7 +555,7 @@ export default function UsersPage() {
                 open={isCreateModalOpen}
                 onOpenChange={setIsCreateModalOpen}
               >
-                <div className="flex lg:flex-1 justify-center justify-items-end mt-1 lg:mt-0">
+                <div className="flex  justify-center justify-items-end mt-1 lg:mt-0">
                   <DialogTrigger asChild>
                     <Button className="bg-blue-600 hover:bg-blue-700">
                       <Plus className="h-4 w-4 mr-2" />
@@ -588,6 +597,7 @@ export default function UsersPage() {
                         className="col-span-3"
                       />
                     </div>
+
                     <div className="grid grid-cols-4 items-center gap-4">
                       <Label htmlFor="password" className="text-right">
                         Mot de passe *
@@ -648,19 +658,41 @@ export default function UsersPage() {
                         Entrepôt *
                       </Label>
                       <Select
-                        value={newUser.warehouse}
-                        onValueChange={(value) =>
-                          setNewUser((p) => ({ ...p, warehouse: value }))
+                        value={
+                          newUser.warehouse_id
+                            ? JSON.stringify({
+                                id: newUser.warehouse_id, // ✅ même clé que dans SelectItem
+                                name: newUser.warehouse, // ✅ même clé que dans SelectItem
+                              })
+                            : ""
                         }
+                        onValueChange={(v) => {
+                          const parsed = JSON.parse(v);
+                          setNewUser((f) => ({
+                            ...f,
+                            warehouse: parsed.name,
+                            warehouse_id: parsed.id,
+                          }));
+                        }}
                       >
                         <SelectTrigger className="col-span-3">
                           <SelectValue placeholder="Sélectionner un entrepôt" />
                         </SelectTrigger>
                         <SelectContent>
                           {warehouses.map((w) => (
-                            <SelectItem key={w.value} value={w.value}>
-                              {w.label}
-                            </SelectItem>
+                            <SelectContent>
+                              {warehouses.map((c) => (
+                                <SelectItem
+                                  key={c.id}
+                                  value={JSON.stringify({
+                                    id: c.id,
+                                    name: c.label,
+                                  })}
+                                >
+                                  {c.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
                           ))}
                         </SelectContent>
                       </Select>
@@ -807,6 +839,7 @@ export default function UsersPage() {
                           )}
                         </Button>
                       </CollapsibleTrigger>
+
                       <CollapsibleContent className="mt-4">
                         <div className="flex flex-col md:flex-row gap-4 p-4 bg-gray-50 rounded">
                           <div className="flex-1">
@@ -868,7 +901,6 @@ export default function UsersPage() {
                   <div className="text-sm text-gray-600 dark:text-gray-300">
                     {filteredUsers.length} utilisateur
                     {filteredUsers.length > 1 ? "s" : ""} trouvé
-                    {filteredUsers.length > 1 ? "s" : ""}
                     {activeFiltersCount > 0 &&
                       ` (${activeFiltersCount} filtre${
                         activeFiltersCount > 1 ? "s" : ""
@@ -879,12 +911,10 @@ export default function UsersPage() {
             </Card>
 
             {/* Users Table */}
-            {/* Users Table (responsive) */}
             <Card>
               <CardHeader>
                 <CardTitle>Liste des utilisateurs</CardTitle>
               </CardHeader>
-
               <CardContent>
                 {isLoading ? (
                   <div className="text-center py-8">Chargement...</div>
@@ -910,10 +940,8 @@ export default function UsersPage() {
                   </div>
                 ) : (
                   <>
-                    {/* Table for medium+ screens */}
                     <div>
                       <Table className="min-w-[900px]">
-                        {/* min-w to keep columns readable */}
                         <TableHeader>
                           <TableRow>
                             <TableHead>Utilisateur</TableHead>
@@ -945,7 +973,6 @@ export default function UsersPage() {
                                   </span>
                                 </div>
                               </TableCell>
-
                               <TableCell>
                                 <div className="flex items-center gap-2">
                                   <Mail className="h-4 w-4 text-gray-400 dark:text-gray-200" />
@@ -954,28 +981,22 @@ export default function UsersPage() {
                                   </span>
                                 </div>
                               </TableCell>
-
                               <TableCell className="table-cell">
                                 <div className="flex items-center gap-2">
                                   <Phone className="h-4 w-4 text-gray-400 dark:text-gray-200" />
                                   <span>{user.phone}</span>
                                 </div>
                               </TableCell>
-
                               <TableCell>{getRoleBadge(user.role)}</TableCell>
-
                               <TableCell className="table-cell">
                                 {user.warehouse}
                               </TableCell>
-
                               <TableCell className="table-cell">
                                 {getStatusBadge(user.status)}
                               </TableCell>
-
                               <TableCell className="table-cell text-sm text-gray-600 dark:text-gray-300">
                                 {formatDate(user.lastlogin) ?? "Jamais"}
                               </TableCell>
-
                               <TableCell>
                                 <div className="flex items-center gap-1">
                                   <Button
@@ -1003,7 +1024,7 @@ export default function UsersPage() {
                                           Supprimer l'utilisateur
                                         </AlertDialogTitle>
                                         <div className="text-sm">
-                                          Êtes-vous sûr de vouloir supprimer
+                                          Êtes-vous sûr de vouloir supprimer{" "}
                                           <strong>{user.name}</strong> ?
                                         </div>
                                       </AlertDialogHeader>
@@ -1039,7 +1060,7 @@ export default function UsersPage() {
           </main>
         </div>
 
-        {/* Edit dialog (shared UI with create) */}
+        {/* Edit dialog */}
         <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
           <DialogContent className="sm:max-w-[425px]">
             <DialogHeader>
@@ -1111,17 +1132,25 @@ export default function UsersPage() {
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label className="text-right">Entrepôt *</Label>
                 <Select
-                  value={editUser.warehouse}
-                  onValueChange={(v) =>
-                    setEditUser((p) => ({ ...p, warehouse: v }))
+                  value={
+                    editUser.warehouse_id ? String(editUser.warehouse_id) : ""
                   }
+                  onValueChange={(value) => {
+                    const id = Number(value);
+                    const w = warehouses.find((wh) => wh.id === id);
+                    setEditUser((p) => ({
+                      ...p,
+                      warehouse_id: id,
+                      warehouse: w?.label ?? "",
+                    }));
+                  }}
                 >
                   <SelectTrigger className="col-span-3">
                     <SelectValue placeholder="Sélectionner un entrepôt" />
                   </SelectTrigger>
                   <SelectContent>
                     {warehouses.map((w) => (
-                      <SelectItem key={w.value} value={w.value}>
+                      <SelectItem key={w.id} value={String(w.id)}>
                         {w.label}
                       </SelectItem>
                     ))}

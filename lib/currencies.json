@@ -1,0 +1,292 @@
+[
+  {
+    "country": "Togo",
+    "currency": "Franc CFA (UEMOA)",
+    "code": "XOF",
+    "symbol": "F CFA",
+    "position": "right"
+  },
+  {
+    "country": "Afrique du Sud",
+    "currency": "Rand",
+    "code": "ZAR",
+    "symbol": "R",
+    "position": "left"
+  },
+  {
+    "country": "Algérie",
+    "currency": "Dinar algérien",
+    "code": "DZD",
+    "symbol": "دج",
+    "position": "right"
+  },
+  {
+    "country": "Angola",
+    "currency": "Kwanza",
+    "code": "AOA",
+    "symbol": "Kz",
+    "position": "left"
+  },
+
+  {
+    "country": "Botswana",
+    "currency": "Pula",
+    "code": "BWP",
+    "symbol": "P",
+    "position": "left"
+  },
+
+  {
+    "country": "Burundi",
+    "currency": "Franc burundais",
+    "code": "BIF",
+    "symbol": "FBu",
+    "position": "right"
+  },
+  {
+    "country": "Cameroun",
+    "currency": "Franc CFA (CEMAC)",
+    "code": "XAF",
+    "symbol": "F CFA",
+    "position": "right"
+  },
+  {
+    "country": "Cap-Vert",
+    "currency": "Escudo cap-verdien",
+    "code": "CVE",
+    "symbol": "$",
+    "position": "right"
+  },
+  {
+    "country": "Comores",
+    "currency": "Franc comorien",
+    "code": "KMF",
+    "symbol": "CF",
+    "position": "right"
+  },
+
+  {
+    "country": "Congo (RDC)",
+    "currency": "Franc congolais",
+    "code": "CDF",
+    "symbol": "FC",
+    "position": "right"
+  },
+
+  {
+    "country": "Djibouti",
+    "currency": "Franc djiboutien",
+    "code": "DJF",
+    "symbol": "Fdj",
+    "position": "right"
+  },
+  {
+    "country": "Égypte",
+    "currency": "Livre égyptienne",
+    "code": "EGP",
+    "symbol": "ج.م",
+    "position": "right"
+  },
+  {
+    "country": "Érythrée",
+    "currency": "Nakfa",
+    "code": "ERN",
+    "symbol": "Nkf",
+    "position": "right"
+  },
+  {
+    "country": "Eswatini",
+    "currency": "Lilangeni",
+    "code": "SZL",
+    "symbol": "E",
+    "position": "left"
+  },
+  {
+    "country": "Éthiopie",
+    "currency": "Birr",
+    "code": "ETB",
+    "symbol": "Br",
+    "position": "right"
+  },
+
+  {
+    "country": "Gambie",
+    "currency": "Dalasi",
+    "code": "GMD",
+    "symbol": "D",
+    "position": "left"
+  },
+  {
+    "country": "Ghana",
+    "currency": "Cedi",
+    "code": "GHS",
+    "symbol": "₵",
+    "position": "left"
+  },
+  {
+    "country": "Guinée",
+    "currency": "Franc guinéen",
+    "code": "GNF",
+    "symbol": "FG",
+    "position": "right"
+  },
+
+  {
+    "country": "Kenya",
+    "currency": "Shilling kényan",
+    "code": "KES",
+    "symbol": "Sh",
+    "position": "left"
+  },
+  {
+    "country": "Lesotho",
+    "currency": "Loti",
+    "code": "LSL",
+    "symbol": "L",
+    "position": "left"
+  },
+  {
+    "country": "Liberia",
+    "currency": "Dollar libérien",
+    "code": "LRD",
+    "symbol": "$",
+    "position": "left"
+  },
+  {
+    "country": "Libye",
+    "currency": "Dinar libyen",
+    "code": "LYD",
+    "symbol": "د.ل",
+    "position": "right"
+  },
+  {
+    "country": "Madagascar",
+    "currency": "Ariary",
+    "code": "MGA",
+    "symbol": "Ar",
+    "position": "right"
+  },
+  {
+    "country": "Malawi",
+    "currency": "Kwacha",
+    "code": "MWK",
+    "symbol": "MK",
+    "position": "left"
+  },
+
+  {
+    "country": "Maroc",
+    "currency": "Dirham marocain",
+    "code": "MAD",
+    "symbol": "د.م",
+    "position": "right"
+  },
+  {
+    "country": "Mauritanie",
+    "currency": "Ouguiya",
+    "code": "MRU",
+    "symbol": "UM",
+    "position": "right"
+  },
+  {
+    "country": "Maurice",
+    "currency": "Roupie mauricienne",
+    "code": "MUR",
+    "symbol": "₨",
+    "position": "left"
+  },
+  {
+    "country": "Mozambique",
+    "currency": "Metical",
+    "code": "MZN",
+    "symbol": "MT",
+    "position": "right"
+  },
+  {
+    "country": "Namibie",
+    "currency": "Dollar namibien",
+    "code": "NAD",
+    "symbol": "$",
+    "position": "left"
+  },
+
+  {
+    "country": "Nigéria",
+    "currency": "Naira",
+    "code": "NGN",
+    "symbol": "₦",
+    "position": "left"
+  },
+  {
+    "country": "Rwanda",
+    "currency": "Franc rwandais",
+    "code": "RWF",
+    "symbol": "FRw",
+    "position": "right"
+  },
+  {
+    "country": "Sao Tomé-et-Principe",
+    "currency": "Dobra",
+    "code": "STN",
+    "symbol": "Db",
+    "position": "right"
+  },
+
+  {
+    "country": "Seychelles",
+    "currency": "Roupie seychelloise",
+    "code": "SCR",
+    "symbol": "₨",
+    "position": "left"
+  },
+  {
+    "country": "Sierra Leone",
+    "currency": "Leone",
+    "code": "SLE",
+    "symbol": "Le",
+    "position": "left"
+  },
+  {
+    "country": "Somalie",
+    "currency": "Shilling somalien",
+    "code": "SOS",
+    "symbol": "Sh",
+    "position": "left"
+  },
+  {
+    "country": "Soudan",
+    "currency": "Livre soudanaise",
+    "code": "SDG",
+    "symbol": "ج.س",
+    "position": "right"
+  },
+  {
+    "country": "Soudan du Sud",
+    "currency": "Livre sud-soudanaise",
+    "code": "SSP",
+    "symbol": "£",
+    "position": "left"
+  },
+  {
+    "country": "Tanzanie",
+    "currency": "Shilling tanzanien",
+    "code": "TZS",
+    "symbol": "Sh",
+    "position": "left"
+  },
+
+  {
+    "country": "Tunisie",
+    "currency": "Dinar tunisien",
+    "code": "TND",
+    "symbol": "د.ت",
+    "position": "right"
+  },
+  {
+    "country": "Ouganda",
+    "currency": "Shilling ougandais",
+    "code": "UGX",
+    "symbol": "Sh",
+    "position": "left"
+  }
+]

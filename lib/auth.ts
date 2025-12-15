@@ -3,6 +3,7 @@ import { NextAuthOptions, getServerSession } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { pool } from "@/lib/db";
+import { number } from "zod";
 
 // Configuration NextAuth
 export const authOptions: NextAuthOptions = {
@@ -50,7 +51,8 @@ export const authOptions: NextAuthOptions = {
             name: user.name,
             role: user.role || 'user',
             warehouse: user.warehouse || 'main',
-            company_id: user.company_id || 1
+            company_id: user.company_id || 1,
+            warehouse_id: user.warehouse_id
           };
         } catch (error) {
           console.error("❌ Erreur d'authentification:", error);
@@ -70,6 +72,7 @@ export const authOptions: NextAuthOptions = {
         token.role = user.role;
         token.warehouse = user.warehouse;
         token.company_id = user.company_id;
+        token.warehouse_id = user.warehouse_id
       }
       return token;
     },
@@ -81,6 +84,7 @@ export const authOptions: NextAuthOptions = {
           role: token.role as string,
           warehouse: token.warehouse as string,
           company_id: token.company_id as number,
+          warehouse_id: token.warehouse_id as number
         };
       }
       return session;
@@ -119,6 +123,7 @@ export async function getCurrentUser() {
     warehouse: session.user.warehouse || 'main',
     name: session.user.name || '',
     email: session.user.email || '',
+    warehouse_id: Number(session.user.warehouse_id) || ''
   };
 }
 
@@ -131,6 +136,7 @@ export async function getCurrentUserCompany() {
   }
 
   const companyId = Number(session.user.company_id);
+  const warehouseId = Number(session.user.warehouse_id);
 
   if (!companyId || Number.isNaN(companyId)) {
     console.error("❌ company_id invalide dans getCurrentUserCompany", session.user);
@@ -144,5 +150,6 @@ export async function getCurrentUserCompany() {
     role: session.user.role || 'user',
     warehouse: session.user.warehouse || 'main',
     company_id: companyId,
+    warehouse_id: warehouseId
   };
 }

@@ -15,6 +15,7 @@ import {
   LogOut,
   Menu,
   X,
+  Boxes,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Image from "next/image";
@@ -51,7 +52,7 @@ const allMenuItems: MenuItem[] = [
     roles: ["admin", "manager"],
   },
   {
-    icon: Warehouse,
+    icon: Boxes,
     label: "Stocks",
     href: "/dashboard/stocks",
     roles: ["admin", "manager"],
@@ -66,6 +67,12 @@ const allMenuItems: MenuItem[] = [
     icon: List,
     label: "Catégories",
     href: "/dashboard/categories",
+    roles: ["admin"],
+  },
+  {
+    icon: Warehouse,
+    label: "Entrepôts",
+    href: "/dashboard/warehouses",
     roles: ["admin"],
   },
   {
@@ -84,7 +91,7 @@ const allMenuItems: MenuItem[] = [
     icon: Settings,
     label: "Paramètres",
     href: "/dashboard/settings",
-    roles: ["admin"],
+    roles: ["admin", "manager"],
   },
   {
     icon: LogOut,
@@ -151,41 +158,41 @@ export function Sidebar() {
   );
 
   // Si le chargement de session est en cours
-  if (status === "loading") {
-    return (
-      <>
-        {/* Bouton menu mobile avec marge pour ne pas cacher le contenu */}
-        <button
-          onClick={() => setIsMobileMenuOpen(true)}
-          className="lg:hidden fixed top-4 left-4 z-50 p-2 bg-slate-900 text-white rounded-md shadow-lg"
-          style={{ marginTop: "env(safe-area-inset-top, 0)" }}
-        >
-          <Menu className="h-6 w-6" />
-        </button>
+  // if (status === "loading") {
+  //   return (
+  //     <>
+  //       {/* Bouton menu mobile avec marge pour ne pas cacher le contenu */}
+  //       <button
+  //         onClick={() => setIsMobileMenuOpen(true)}
+  //         className="lg:hidden fixed top-4 left-4 z-50 p-2 bg-slate-900 text-white rounded-md shadow-lg"
+  //         style={{ marginTop: "env(safe-area-inset-top, 0)" }}
+  //       >
+  //         <Menu className="h-6 w-6" />
+  //       </button>
 
-        {/* Sidebar de chargement */}
-        <div className="hidden lg:flex w-64 bg-slate-900 text-white flex-col">
-          <div className="p-4 border-b border-slate-700">
-            <div className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center p-1">
-                <Image
-                  src="/logo.png"
-                  alt="Logo StockPro"
-                  width={75}
-                  height={75}
-                  priority
-                />
-              </div>
-              <span className="font-bold text-lg">StockPro</span>
-            </div>
-          </div>
-          <div className="flex-1 p-4 flex items-center justify-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-white"></div>
-          </div>
-        </div>
-      </>
-    );
-  }
+  //       {/* Sidebar de chargement */}
+  //       <div className="hidden lg:flex w-64 bg-slate-900 text-white flex-col">
+  //         <div className="p-4 border-b border-slate-700">
+  //           <div className="flex items-center space-x-2">
+  //             <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center p-1">
+  //               <Image
+  //                 src="/logo.png"
+  //                 alt="Logo StockPro"
+  //                 width={75}
+  //                 height={75}
+  //                 priority
+  //               />
+  //             </div>
+  //             <span className="font-bold text-lg">StockPro</span>
+  //           </div>
+  //         </div>
+  //         <div className="flex-1 p-4 flex items-center justify-center">
+  //           <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-white"></div>
+  //         </div>
+  //       </div>
+  //     </>
+  //   );
+  // }
 
   // Si aucune session, ne pas afficher la sidebar
   if (!session) {

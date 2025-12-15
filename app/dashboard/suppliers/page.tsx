@@ -367,7 +367,7 @@ export default function SuppliersPage() {
                 open={isCreateModalOpen}
                 onOpenChange={setIsCreateModalOpen}
               >
-                <div className="flex lg:flex-1 justify-center justify-items-end mt-1 lg:mt-0">
+                <div className="flex  justify-center justify-items-end mt-1 lg:mt-0">
                   <DialogTrigger asChild>
                     <Button className="bg-blue-600 hover:bg-blue-700">
                       <Plus className="h-4 w-4 mr-2" />

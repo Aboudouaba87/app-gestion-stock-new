@@ -1,11 +1,31 @@
 export const dynamic = "force-dynamic";
 
-// app/api/dashboard/overview/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { pool } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 
 type Period = "week" | "month" | "quarter" | "year" | "custom";
+
+function buildWarehouseCondition(warehouse: string, companyId: number, paramIndex: number): {
+  condition: string;
+  params: any[];
+} {
+  if (warehouse === "all") {
+    return { condition: "", params: [] };
+  }
+
+  return {
+    condition: ` AND EXISTS (
+      SELECT 1 FROM sale_products sp2
+      JOIN product_warehouses pw ON pw.product_id = sp2.product_id
+      JOIN warehouses w ON pw.warehouse_id = w.id
+      WHERE sp2.sale_id = s.id
+      AND w.company_id = $1
+      AND w.value = $${paramIndex}
+    )`,
+    params: [warehouse]
+  };
+}
 
 export async function GET(req: NextRequest) {
   const client = await pool.connect();
@@ -17,17 +37,22 @@ export async function GET(req: NextRequest) {
 
     const url = new URL(req.url);
     const period = (url.searchParams.get("period") || "week") as Period;
+    const warehouse = url.searchParams.get("warehouse") || "all";
 
     const dataByPeriod = {
-      week: await getWeekData(client, user.company_id),
-      month: await getMonthData(client, user.company_id),
-      quarter: await getQuarterData(client, user.company_id),
-      year: await getYearData(client, user.company_id),
-      custom: await getCustomData(client, user.company_id),
+      week: await getWeekData(client, user.company_id, warehouse),
+      month: await getMonthData(client, user.company_id, warehouse),
+      quarter: await getQuarterData(client, user.company_id, warehouse),
+      year: await getYearData(client, user.company_id, warehouse),
+      custom: await getCustomData(client, user.company_id, warehouse),
     };
 
     const result = {
-      [period]: dataByPeriod[period],
+      week: dataByPeriod.week,
+      month: dataByPeriod.month,
+      quarter: dataByPeriod.quarter,
+      year: dataByPeriod.year,
+      custom: dataByPeriod.custom,
     };
 
     return NextResponse.json(result, { status: 200 });
@@ -45,12 +70,9 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// 🔥 CALCUL DU PROFIT - FORMULE CORRECTE
-// Profit = (Montant HT) - (Coût total des produits vendus)
-// Coût total = SUM(quantité × cost_price)
+async function getWeekData(client: any, companyId: number, warehouse: string) {
+  const warehouseCondition = buildWarehouseCondition(warehouse, companyId, 2);
 
-// SEMAINE
-async function getWeekData(client: any, companyId: number) {
   const salesRes = await client.query(
     `
     SELECT 
@@ -69,10 +91,11 @@ async function getWeekData(client: any, companyId: number) {
     LEFT JOIN products p ON LOWER(p.name) = LOWER(sp.name)
     WHERE s.date >= CURRENT_DATE - INTERVAL '6 days'
       AND s.company_id = $1
+      ${warehouseCondition.condition}
     GROUP BY s.date
     ORDER BY s.date
     `,
-    [companyId]
+    [companyId, ...warehouseCondition.params]
   );
 
   const kpisRes = await client.query(
@@ -87,10 +110,12 @@ async function getWeekData(client: any, companyId: number) {
       COUNT(s.id)::int as orders,
       COUNT(DISTINCT s.client_id)::int as clients,
       (
-        SELECT COUNT(*)::int 
+        SELECT COUNT(DISTINCT pw.product_id)::int 
         FROM product_warehouses pw 
+        JOIN warehouses w ON pw.warehouse_id = w.id
         WHERE pw.stock = 0
-          AND pw.company_id = $1
+          AND w.company_id = $1
+          ${warehouse !== "all" ? "AND w.value = $2" : ""}
       ) as stockout_count,
       (
         SELECT COUNT(*)::int 
@@ -102,8 +127,9 @@ async function getWeekData(client: any, companyId: number) {
     LEFT JOIN products p ON LOWER(p.name) = LOWER(sp.name)
     WHERE s.date >= CURRENT_DATE - INTERVAL '7 days'
       AND s.company_id = $1
+      ${warehouseCondition.condition}
     `,
-    [companyId]
+    [companyId, ...warehouseCondition.params]
   );
 
   const categoriesRes = await client.query(
@@ -124,7 +150,13 @@ async function getWeekData(client: any, companyId: number) {
            JOIN products p2 ON LOWER(p2.name) = LOWER(sp2.name)
            WHERE s2.date >= CURRENT_DATE - INTERVAL '7 days'
              AND s2.company_id = $1
-             AND p2.company_id = $1), 0
+             AND p2.company_id = $1
+             ${warehouse !== "all" ?
+      `AND EXISTS (
+                 SELECT 1 FROM product_warehouses pw2 
+                 WHERE pw2.product_id = p2.id 
+                 AND pw2.warehouse_id = (SELECT id FROM warehouses WHERE value = $2 AND company_id = $1)
+               )` : ''}), 0
         ))
       )::int as percentage
     FROM sale_products sp
@@ -133,11 +165,17 @@ async function getWeekData(client: any, companyId: number) {
     WHERE s.date >= CURRENT_DATE - INTERVAL '7 days'
       AND s.company_id = $1
       AND p.company_id = $1
+      ${warehouse !== "all" ?
+      `AND EXISTS (
+          SELECT 1 FROM product_warehouses pw 
+          WHERE pw.product_id = p.id 
+          AND pw.warehouse_id = (SELECT id FROM warehouses WHERE value = $2 AND company_id = $1)
+        )` : ''}
     GROUP BY p.category
     ORDER BY sales_value_ttc DESC
     LIMIT 4
     `,
-    [companyId]
+    [companyId, ...warehouseCondition.params]
   );
 
   const topProductsRes = await client.query(
@@ -156,11 +194,12 @@ async function getWeekData(client: any, companyId: number) {
     JOIN products p ON LOWER(p.name) = LOWER(sp.name)
     WHERE s.date >= CURRENT_DATE - INTERVAL '7 days'
       AND s.company_id = $1
+      ${warehouseCondition.condition}
     GROUP BY sp.name
     ORDER BY revenue_ttc DESC
     LIMIT 7
     `,
-    [companyId]
+    [companyId, ...warehouseCondition.params]
   );
 
   const dayNames = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
@@ -192,7 +231,7 @@ async function getWeekData(client: any, companyId: number) {
       : 0;
 
   const kpis = {
-    revenue: Math.round(Number(kpisData.revenue_ttc)), // AJOUTEZ CETTE LIGNE
+    revenue: Math.round(Number(kpisData.revenue_ttc)),
     revenue_ttc: Math.round(Number(kpisData.revenue_ttc)),
     revenue_ht: Math.round(Number(kpisData.revenue_ht)),
     total_tax: Math.round(Number(kpisData.total_tax)),
@@ -232,8 +271,9 @@ async function getWeekData(client: any, companyId: number) {
   };
 }
 
-// MOIS
-async function getMonthData(client: any, companyId: number) {
+async function getMonthData(client: any, companyId: number, warehouse: string) {
+  const warehouseCondition = buildWarehouseCondition(warehouse, companyId, 2);
+
   const salesRes = await client.query(
     `
     SELECT 
@@ -252,10 +292,11 @@ async function getMonthData(client: any, companyId: number) {
     LEFT JOIN products p ON LOWER(p.name) = LOWER(sp.name)
     WHERE s.date >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '11 months'
       AND s.company_id = $1
+      ${warehouseCondition.condition}
     GROUP BY DATE_TRUNC('month', s.date), month_num, year_num
     ORDER BY month_start
     `,
-    [companyId]
+    [companyId, ...warehouseCondition.params]
   );
 
   const kpisRes = await client.query(
@@ -269,10 +310,12 @@ async function getMonthData(client: any, companyId: number) {
       COUNT(s.id)::int as orders,
       COUNT(DISTINCT s.client_id)::int as clients,
       (
-        SELECT COUNT(*)::int 
+        SELECT COUNT(DISTINCT pw.product_id)::int 
         FROM product_warehouses pw 
+        JOIN warehouses w ON pw.warehouse_id = w.id
         WHERE pw.stock = 0
-          AND pw.company_id = $1
+          AND w.company_id = $1
+          ${warehouse !== "all" ? "AND w.value = $2" : ""}
       ) as stockout_count,
       (
         SELECT COUNT(*)::int FROM products p
@@ -283,8 +326,9 @@ async function getMonthData(client: any, companyId: number) {
     LEFT JOIN products p ON LOWER(p.name) = LOWER(sp.name)
     WHERE s.date >= CURRENT_DATE - INTERVAL '30 days'
       AND s.company_id = $1
+      ${warehouseCondition.condition}
     `,
-    [companyId]
+    [companyId, ...warehouseCondition.params]
   );
 
   const categoriesRes = await client.query(
@@ -305,7 +349,13 @@ async function getMonthData(client: any, companyId: number) {
            JOIN products p2 ON LOWER(p2.name) = LOWER(sp2.name)
            WHERE s2.date >= CURRENT_DATE - INTERVAL '30 days'
              AND s2.company_id = $1
-             AND p2.company_id = $1), 0
+             AND p2.company_id = $1
+             ${warehouse !== "all" ?
+      `AND EXISTS (
+                 SELECT 1 FROM product_warehouses pw2 
+                 WHERE pw2.product_id = p2.id 
+                 AND pw2.warehouse_id = (SELECT id FROM warehouses WHERE value = $2 AND company_id = $1)
+               )` : ''}), 0
         ))
       )::int as percentage
     FROM sale_products sp
@@ -314,11 +364,17 @@ async function getMonthData(client: any, companyId: number) {
     WHERE s.date >= CURRENT_DATE - INTERVAL '30 days'
       AND s.company_id = $1
       AND p.company_id = $1
+      ${warehouse !== "all" ?
+      `AND EXISTS (
+          SELECT 1 FROM product_warehouses pw 
+          WHERE pw.product_id = p.id 
+          AND pw.warehouse_id = (SELECT id FROM warehouses WHERE value = $2 AND company_id = $1)
+        )` : ''}
     GROUP BY p.category
     ORDER BY sales_value_ttc DESC
     LIMIT 4
     `,
-    [companyId]
+    [companyId, ...warehouseCondition.params]
   );
 
   const topProductsRes = await client.query(
@@ -337,11 +393,12 @@ async function getMonthData(client: any, companyId: number) {
     JOIN products p ON LOWER(p.name) = LOWER(sp.name)
     WHERE s.date >= CURRENT_DATE - INTERVAL '30 days'
       AND s.company_id = $1
+      ${warehouseCondition.condition}
     GROUP BY sp.name
     ORDER BY revenue_ttc DESC
     LIMIT 7
     `,
-    [companyId]
+    [companyId, ...warehouseCondition.params]
   );
 
   const monthMap: { [key: string]: string } = {
@@ -368,7 +425,7 @@ async function getMonthData(client: any, companyId: number) {
       : 0;
 
   const kpis = {
-    revenue: Math.round(Number(kpisData.revenue_ttc)), // AJOUTEZ CETTE LIGNE
+    revenue: Math.round(Number(kpisData.revenue_ttc)),
     revenue_ttc: Math.round(Number(kpisData.revenue_ttc)),
     revenue_ht: Math.round(Number(kpisData.revenue_ht)),
     total_tax: Math.round(Number(kpisData.total_tax)),
@@ -408,8 +465,9 @@ async function getMonthData(client: any, companyId: number) {
   };
 }
 
-// TRIMESTRE
-async function getQuarterData(client: any, companyId: number) {
+async function getQuarterData(client: any, companyId: number, warehouse: string) {
+  const warehouseCondition = buildWarehouseCondition(warehouse, companyId, 2);
+
   const salesRes = await client.query(
     `
     SELECT 
@@ -427,10 +485,11 @@ async function getQuarterData(client: any, companyId: number) {
     LEFT JOIN products p ON LOWER(p.name) = LOWER(sp.name)
     WHERE s.date >= DATE_TRUNC('quarter', CURRENT_DATE) - INTERVAL '1 year'
       AND s.company_id = $1
+      ${warehouseCondition.condition}
     GROUP BY EXTRACT(QUARTER FROM s.date), EXTRACT(YEAR FROM s.date)
     ORDER BY year, quarter
     `,
-    [companyId]
+    [companyId, ...warehouseCondition.params]
   );
 
   const kpisRes = await client.query(
@@ -444,10 +503,12 @@ async function getQuarterData(client: any, companyId: number) {
       COUNT(s.id)::int as orders,
       COUNT(DISTINCT s.client_id)::int as clients,
       (
-        SELECT COUNT(*)::int 
+        SELECT COUNT(DISTINCT pw.product_id)::int 
         FROM product_warehouses pw 
+        JOIN warehouses w ON pw.warehouse_id = w.id
         WHERE pw.stock = 0
-          AND pw.company_id = $1
+          AND w.company_id = $1
+          ${warehouse !== "all" ? "AND w.value = $2" : ""}
       ) as stockout_count,
       (
         SELECT COUNT(*)::int FROM products p
@@ -458,8 +519,9 @@ async function getQuarterData(client: any, companyId: number) {
     LEFT JOIN products p ON LOWER(p.name) = LOWER(sp.name)
     WHERE s.date >= DATE_TRUNC('quarter', CURRENT_DATE)
       AND s.company_id = $1
+      ${warehouseCondition.condition}
     `,
-    [companyId]
+    [companyId, ...warehouseCondition.params]
   );
 
   const categoriesRes = await client.query(
@@ -480,7 +542,13 @@ async function getQuarterData(client: any, companyId: number) {
            JOIN products p2 ON LOWER(p2.name) = LOWER(sp2.name)
            WHERE s2.date >= DATE_TRUNC('quarter', CURRENT_DATE)
              AND s2.company_id = $1
-             AND p2.company_id = $1), 0
+             AND p2.company_id = $1
+             ${warehouse !== "all" ?
+      `AND EXISTS (
+                 SELECT 1 FROM product_warehouses pw2 
+                 WHERE pw2.product_id = p2.id 
+                 AND pw2.warehouse_id = (SELECT id FROM warehouses WHERE value = $2 AND company_id = $1)
+               )` : ''}), 0
         ))
       )::int as percentage
     FROM sale_products sp
@@ -489,11 +557,17 @@ async function getQuarterData(client: any, companyId: number) {
     WHERE s.date >= DATE_TRUNC('quarter', CURRENT_DATE)
       AND s.company_id = $1
       AND p.company_id = $1
+      ${warehouse !== "all" ?
+      `AND EXISTS (
+          SELECT 1 FROM product_warehouses pw 
+          WHERE pw.product_id = p.id 
+          AND pw.warehouse_id = (SELECT id FROM warehouses WHERE value = $2 AND company_id = $1)
+        )` : ''}
     GROUP BY p.category
     ORDER BY sales_value_ttc DESC
     LIMIT 4
     `,
-    [companyId]
+    [companyId, ...warehouseCondition.params]
   );
 
   const topProductsRes = await client.query(
@@ -512,11 +586,12 @@ async function getQuarterData(client: any, companyId: number) {
     JOIN products p ON LOWER(p.name) = LOWER(sp.name)
     WHERE s.date >= DATE_TRUNC('quarter', CURRENT_DATE)
       AND s.company_id = $1
+      ${warehouseCondition.condition}
     GROUP BY sp.name
     ORDER BY revenue_ttc DESC
     LIMIT 7
     `,
-    [companyId]
+    [companyId, ...warehouseCondition.params]
   );
 
   const kpisData = kpisRes.rows[0];
@@ -536,6 +611,7 @@ async function getQuarterData(client: any, companyId: number) {
       profit: Math.round(Number(row.profit)),
     })),
     kpis: {
+      revenue: Math.round(Number(kpisData.revenue_ttc)),
       revenue_ttc: Math.round(Number(kpisData.revenue_ttc)),
       revenue_ht: Math.round(Number(kpisData.revenue_ht)),
       profit: Math.round(Number(kpisData.total_profit)),
@@ -564,8 +640,9 @@ async function getQuarterData(client: any, companyId: number) {
   };
 }
 
-// ANNEE
-async function getYearData(client: any, companyId: number) {
+async function getYearData(client: any, companyId: number, warehouse: string) {
+  const warehouseCondition = buildWarehouseCondition(warehouse, companyId, 2);
+
   const salesRes = await client.query(
     `
     SELECT 
@@ -581,10 +658,11 @@ async function getYearData(client: any, companyId: number) {
     LEFT JOIN products p ON LOWER(p.name) = LOWER(sp.name)
     WHERE s.date >= DATE_TRUNC('year', CURRENT_DATE) - INTERVAL '3 years'
       AND s.company_id = $1
+      ${warehouseCondition.condition}
     GROUP BY EXTRACT(YEAR FROM s.date)
     ORDER BY year
     `,
-    [companyId]
+    [companyId, ...warehouseCondition.params]
   );
 
   const kpisRes = await client.query(
@@ -598,10 +676,12 @@ async function getYearData(client: any, companyId: number) {
       COUNT(s.id)::int as orders,
       COUNT(DISTINCT s.client_id)::int as clients,
       (
-        SELECT COUNT(*)::int 
+        SELECT COUNT(DISTINCT pw.product_id)::int 
         FROM product_warehouses pw 
+        JOIN warehouses w ON pw.warehouse_id = w.id
         WHERE pw.stock = 0
-          AND pw.company_id = $1
+          AND w.company_id = $1
+          ${warehouse !== "all" ? "AND w.value = $2" : ""}
       ) as stockout_count,
       (
         SELECT COUNT(*)::int FROM products p
@@ -612,8 +692,9 @@ async function getYearData(client: any, companyId: number) {
     LEFT JOIN products p ON LOWER(p.name) = LOWER(sp.name)
     WHERE s.date >= DATE_TRUNC('year', CURRENT_DATE)
       AND s.company_id = $1
+      ${warehouseCondition.condition}
     `,
-    [companyId]
+    [companyId, ...warehouseCondition.params]
   );
 
   const categoriesRes = await client.query(
@@ -634,7 +715,13 @@ async function getYearData(client: any, companyId: number) {
            JOIN products p2 ON LOWER(p2.name) = LOWER(sp2.name)
            WHERE s2.date >= DATE_TRUNC('year', CURRENT_DATE)
              AND s2.company_id = $1
-             AND p2.company_id = $1), 0
+             AND p2.company_id = $1
+             ${warehouse !== "all" ?
+      `AND EXISTS (
+                 SELECT 1 FROM product_warehouses pw2 
+                 WHERE pw2.product_id = p2.id 
+                 AND pw2.warehouse_id = (SELECT id FROM warehouses WHERE value = $2 AND company_id = $1)
+               )` : ''}), 0
         ))
       )::int as percentage
     FROM sale_products sp
@@ -643,11 +730,17 @@ async function getYearData(client: any, companyId: number) {
     WHERE s.date >= DATE_TRUNC('year', CURRENT_DATE)
       AND s.company_id = $1
       AND p.company_id = $1
+      ${warehouse !== "all" ?
+      `AND EXISTS (
+          SELECT 1 FROM product_warehouses pw 
+          WHERE pw.product_id = p.id 
+          AND pw.warehouse_id = (SELECT id FROM warehouses WHERE value = $2 AND company_id = $1)
+        )` : ''}
     GROUP BY p.category
     ORDER BY sales_value_ttc DESC
     LIMIT 4
     `,
-    [companyId]
+    [companyId, ...warehouseCondition.params]
   );
 
   const topProductsRes = await client.query(
@@ -666,11 +759,12 @@ async function getYearData(client: any, companyId: number) {
     JOIN products p ON LOWER(p.name) = LOWER(sp.name)
     WHERE s.date >= DATE_TRUNC('year', CURRENT_DATE)
       AND s.company_id = $1
+      ${warehouseCondition.condition}
     GROUP BY sp.name
     ORDER BY revenue_ttc DESC
     LIMIT 7
     `,
-    [companyId]
+    [companyId, ...warehouseCondition.params]
   );
 
   const kpisData = kpisRes.rows[0];
@@ -690,6 +784,7 @@ async function getYearData(client: any, companyId: number) {
       profit: Math.round(Number(row.profit)),
     })),
     kpis: {
+      revenue: Math.round(Number(kpisData.revenue_ttc)),
       revenue_ttc: Math.round(Number(kpisData.revenue_ttc)),
       revenue_ht: Math.round(Number(kpisData.revenue_ht)),
       profit: Math.round(Number(kpisData.total_profit)),
@@ -718,8 +813,9 @@ async function getYearData(client: any, companyId: number) {
   };
 }
 
-// PERSONNALISÉ (30 derniers jours)
-async function getCustomData(client: any, companyId: number) {
+async function getCustomData(client: any, companyId: number, warehouse: string) {
+  const warehouseCondition = buildWarehouseCondition(warehouse, companyId, 2);
+
   const salesRes = await client.query(
     `
     SELECT 
@@ -736,11 +832,12 @@ async function getCustomData(client: any, companyId: number) {
     LEFT JOIN products p ON LOWER(p.name) = LOWER(sp.name)
     WHERE s.date >= CURRENT_DATE - INTERVAL '29 days'
       AND s.company_id = $1
+      ${warehouseCondition.condition}
     GROUP BY DATE_TRUNC('day', s.date)
     ORDER BY day
     LIMIT 30
     `,
-    [companyId]
+    [companyId, ...warehouseCondition.params]
   );
 
   const kpisRes = await client.query(
@@ -754,10 +851,12 @@ async function getCustomData(client: any, companyId: number) {
       COUNT(s.id)::int as orders,
       COUNT(DISTINCT s.client_id)::int as clients,
       (
-        SELECT COUNT(*)::int 
+        SELECT COUNT(DISTINCT pw.product_id)::int 
         FROM product_warehouses pw 
+        JOIN warehouses w ON pw.warehouse_id = w.id
         WHERE pw.stock = 0
-          AND pw.company_id = $1
+          AND w.company_id = $1
+          ${warehouse !== "all" ? "AND w.value = $2" : ""}
       ) as stockout_count,
       (
         SELECT COUNT(*)::int FROM products p
@@ -768,8 +867,9 @@ async function getCustomData(client: any, companyId: number) {
     LEFT JOIN products p ON LOWER(p.name) = LOWER(sp.name)
     WHERE s.date >= CURRENT_DATE - INTERVAL '30 days'
       AND s.company_id = $1
+      ${warehouseCondition.condition}
     `,
-    [companyId]
+    [companyId, ...warehouseCondition.params]
   );
 
   const categoriesRes = await client.query(
@@ -790,7 +890,13 @@ async function getCustomData(client: any, companyId: number) {
            JOIN products p2 ON LOWER(p2.name) = LOWER(sp2.name)
            WHERE s2.date >= CURRENT_DATE - INTERVAL '30 days'
              AND s2.company_id = $1
-             AND p2.company_id = $1), 0
+             AND p2.company_id = $1
+             ${warehouse !== "all" ?
+      `AND EXISTS (
+                 SELECT 1 FROM product_warehouses pw2 
+                 WHERE pw2.product_id = p2.id 
+                 AND pw2.warehouse_id = (SELECT id FROM warehouses WHERE value = $2 AND company_id = $1)
+               )` : ''}), 0
         ))
       )::int as percentage
     FROM sale_products sp
@@ -799,11 +905,17 @@ async function getCustomData(client: any, companyId: number) {
     WHERE s.date >= CURRENT_DATE - INTERVAL '30 days'
       AND s.company_id = $1
       AND p.company_id = $1
+      ${warehouse !== "all" ?
+      `AND EXISTS (
+          SELECT 1 FROM product_warehouses pw 
+          WHERE pw.product_id = p.id 
+          AND pw.warehouse_id = (SELECT id FROM warehouses WHERE value = $2 AND company_id = $1)
+        )` : ''}
     GROUP BY p.category
     ORDER BY sales_value_ttc DESC
     LIMIT 4
     `,
-    [companyId]
+    [companyId, ...warehouseCondition.params]
   );
 
   const topProductsRes = await client.query(
@@ -822,11 +934,12 @@ async function getCustomData(client: any, companyId: number) {
     JOIN products p ON LOWER(p.name) = LOWER(sp.name)
     WHERE s.date >= CURRENT_DATE - INTERVAL '30 days'
       AND s.company_id = $1
+      ${warehouseCondition.condition}
     GROUP BY sp.name
     ORDER BY revenue_ttc DESC
     LIMIT 7
     `,
-    [companyId]
+    [companyId, ...warehouseCondition.params]
   );
 
   const kpisData = kpisRes.rows[0];
@@ -846,6 +959,7 @@ async function getCustomData(client: any, companyId: number) {
       profit: Math.round(Number(row.profit)),
     })),
     kpis: {
+      revenue: Math.round(Number(kpisData.revenue_ttc)),
       revenue_ttc: Math.round(Number(kpisData.revenue_ttc)),
       revenue_ht: Math.round(Number(kpisData.revenue_ht)),
       profit: Math.round(Number(kpisData.total_profit)),

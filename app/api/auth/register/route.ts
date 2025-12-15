@@ -19,6 +19,7 @@ export async function POST(request: Request) {
             confirmPassword
         } = body;
 
+
         // Validations
         if (password !== confirmPassword) {
             return NextResponse.json(
@@ -121,6 +122,7 @@ export async function POST(request: Request) {
                 role: newUser.role,
                 warehouse: newUser.warehouse,
                 company_id: newUser.company_id
+                // warehouse_id: newUser.warehouse_id
             },
             company: {
                 id: company.id,

@@ -20,7 +20,7 @@ async function getCurrentUserCompany() {
     const userEmail = session.user.email;
 
     const userResult = await pool.query(
-        "SELECT id, company_id FROM users WHERE email = $1",
+        "SELECT id, company_id, warehouse_id, role FROM users WHERE email = $1",
         [userEmail]
     );
 
@@ -28,7 +28,7 @@ async function getCurrentUserCompany() {
         throw new Error("Utilisateur non trouvé");
     }
 
-    return userResult.rows[0] as { id: number; company_id: number };
+    return userResult.rows[0] as { id: number; company_id: number, warehouse_id: number, role: string };
 }
 
 /* GET : récupérer toutes les catégories de la company */
@@ -36,36 +36,74 @@ export async function GET(req: NextRequest) {
     try {
         const user = await getCurrentUserCompany();
         const companyId = user.company_id;
+        const warehouse_id = user.warehouse_id
+        const role = user.role
+
+        console.log('mmmmmmmmmmm', warehouse_id, role);
+
 
         // Récupérer les catégories avec le nombre de produits et le nom du parent
-        const result = await pool.query(
-            `
-            SELECT 
+        let result = null
+
+        if (role === 'admin') {
+
+            result = await pool.query(
+                `
+           SELECT 
                 c.id,
                 c.name,
-                COALESCE(c.description, '') as description,
-                COALESCE(c.status, 'active') as status,
+                COALESCE(c.description, '') AS description,
+                COALESCE(c.status, 'active') AS status,
                 c.parent_id,
-                p.name as parent_name,
+                p.name AS parent_name,
                 c.company_id,
                 c.created_at,
                 c.updated_at,
-                COALESCE(pc.product_count, 0) as product_count
+                (
+                    SELECT COUNT(*) 
+                    FROM product_warehouses pw
+                    WHERE pw.company_id = c.company_id
+                ) AS product_count
             FROM categories c
-            LEFT JOIN categories p ON c.parent_id = p.id AND p.company_id = c.company_id
-            LEFT JOIN (
-                SELECT category_id, COUNT(*) as product_count 
-                FROM products 
-                WHERE company_id = $1
-                GROUP BY category_id
-            ) pc ON c.id = pc.category_id
+            LEFT JOIN categories p 
+                ON c.parent_id = p.id AND p.company_id = c.company_id
             WHERE c.company_id = $1
             ORDER BY 
                 CASE WHEN c.parent_id IS NULL THEN 0 ELSE 1 END,
-                c.name ASC
+                c.name ASC;
             `,
-            [companyId]
-        );
+                [companyId]
+            );
+        } else {
+            result = await pool.query(
+                `
+           SELECT 
+                c.id,
+                c.name,
+                COALESCE(c.description, '') AS description,
+                COALESCE(c.status, 'active') AS status,
+                c.parent_id,
+                p.name AS parent_name,
+                c.company_id,
+                c.created_at,
+                c.updated_at,
+                (
+                    SELECT COUNT(*) 
+                    FROM product_warehouses pw
+                    WHERE pw.company_id = c.company_id AND pw.warehouse_id = $1
+                ) AS product_count
+            FROM categories c
+            LEFT JOIN categories p 
+                ON c.parent_id = p.id AND p.company_id = c.company_id
+            WHERE c.company_id = $2
+            ORDER BY 
+                CASE WHEN c.parent_id IS NULL THEN 0 ELSE 1 END,
+                c.name ASC;
+
+            `,
+                [warehouse_id, companyId]
+            );
+        }
 
         console.log(`📦 ${result.rows.length} catégories trouvées pour company_id: ${companyId}`);
 

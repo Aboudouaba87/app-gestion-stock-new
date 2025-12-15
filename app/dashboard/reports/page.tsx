@@ -7,9 +7,17 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
+  Tooltip as RechartsTooltip,
+  PieChart,
+  Pie,
+  Cell,
+  Legend,
+  BarChart,
+  Bar,
   Tooltip,
+  ResponsiveContainer,
 } from "recharts";
-
+import type { TooltipProps } from "recharts";
 import { useEffect, useState } from "react";
 import {
   Download,
@@ -22,7 +30,13 @@ import {
   FileText,
   Loader2,
   AlertCircle,
+  BarChart as BarChartIcon,
+  Eye,
+  RefreshCw,
+  Plus,
 } from "lucide-react";
+
+// import { BarChartIcon } from "lucide-react"; // ou utilisez BarChart depuis lucide-react
 import { Button } from "@/app/dashboard/components/ui/button";
 import {
   Card,
@@ -40,10 +54,11 @@ import {
 } from "@/app/dashboard/components/ui/select";
 import { DatePickerRange } from "@/app/dashboard/components/date-picker-range";
 import { toast } from "@/hooks/use-toast";
-import * as XLSX from "xlsx"; // L'import de xlsx
+import * as XLSX from "xlsx";
 import { RoleGuard } from "../components/auth/role-guard";
+import { useDetermineSympole } from "@/lib/useDetermineSympole";
+import { formatCurrency } from "@/lib/formatCurency";
 
-// Types pour les données
 interface SalesData {
   month: string;
   sales: number;
@@ -86,36 +101,45 @@ interface DashboardData {
   custom: PeriodData;
 }
 
+interface Warehouse {
+  id: number;
+  value: string;
+  label: string;
+  company_id: number;
+  metadata?: any;
+}
+
+interface StockCategory {
+  name: string;
+  currentStock: number;
+  minimumThreshold: number;
+  color?: string;
+}
+
+interface StockData {
+  totalProducts: number;
+  averageStock: number;
+  turnoverDays: number;
+  stockoutRate: number;
+  criticalAlerts: number;
+  reorderAlerts: number;
+  categories: StockCategory[];
+  lastUpdate: string;
+}
+
 type Period = "week" | "month" | "quarter" | "year" | "custom";
 
-// tes interfaces:
-interface PeriodData {
-  sales: SalesData[];
-  kpis: KpisData;
-  categories: CategoryData[];
-  topProducts: TopProductData[];
-}
-
-interface DashboardData {
-  week: PeriodData;
-  month: PeriodData;
-  quarter: PeriodData;
-  year: PeriodData;
-  custom: PeriodData;
-}
-
-// Données par défaut (fallback)
 const defaultData: DashboardData = {
   week: {
-    sales: [
-      { month: "Lun", sales: 0, orders: 0, profit: 0 },
-      { month: "Mar", sales: 0, orders: 0, profit: 0 },
-      { month: "Mer", sales: 0, orders: 0, profit: 0 },
-      { month: "Jeu", sales: 0, orders: 0, profit: 0 },
-      { month: "Ven", sales: 0, orders: 0, profit: 0 },
-      { month: "Sam", sales: 0, orders: 0, profit: 0 },
-      { month: "Dim", sales: 0, orders: 0, profit: 0 },
-    ],
+    sales: Array.from({ length: 7 }, (_, i) => {
+      const days = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
+      return {
+        month: days[i],
+        sales: 0,
+        orders: 0,
+        profit: 0,
+      };
+    }),
     kpis: { revenue: 0, orders: 0, clients: 0, stockout: 0 },
     categories: [
       { name: "Électronique", value: 0, sales: 0, color: "#3b82f6" },
@@ -128,58 +152,29 @@ const defaultData: DashboardData = {
   month: {
     sales: [],
     kpis: { revenue: 0, orders: 0, clients: 0, stockout: 0 },
-    categories: [
-      { name: "Électronique", value: 0, sales: 0, color: "#3b82f6" },
-      { name: "Vêtements", value: 0, sales: 0, color: "#10b981" },
-      { name: "Maison & Jardin", value: 0, sales: 0, color: "#f59e0b" },
-      { name: "Sport & Loisirs", value: 0, sales: 0, color: "#ef4444" },
-    ],
-    topProducts: [{ name: "Aucun produit", sales: 0, revenue: 0 }],
+    categories: [],
+    topProducts: [],
   },
   quarter: {
     sales: [],
     kpis: { revenue: 0, orders: 0, clients: 0, stockout: 0 },
-    categories: [
-      { name: "Électronique", value: 0, sales: 0, color: "#3b82f6" },
-      { name: "Vêtements", value: 0, sales: 0, color: "#10b981" },
-      { name: "Maison & Jardin", value: 0, sales: 0, color: "#f59e0b" },
-      { name: "Sport & Loisirs", value: 0, sales: 0, color: "#ef4444" },
-    ],
-    topProducts: [{ name: "Aucun produit", sales: 0, revenue: 0 }],
+    categories: [],
+    topProducts: [],
   },
   year: {
     sales: [],
     kpis: { revenue: 0, orders: 0, clients: 0, stockout: 0 },
-    categories: [
-      { name: "Électronique", value: 0, sales: 0, color: "#3b82f6" },
-      { name: "Vêtements", value: 0, sales: 0, color: "#10b981" },
-      { name: "Maison & Jardin", value: 0, sales: 0, color: "#f59e0b" },
-      { name: "Sport & Loisirs", value: 0, sales: 0, color: "#ef4444" },
-    ],
-    topProducts: [{ name: "Aucun produit", sales: 0, revenue: 0 }],
+    categories: [],
+    topProducts: [],
   },
   custom: {
     sales: [],
     kpis: { revenue: 0, orders: 0, clients: 0, stockout: 0 },
-    categories: [
-      { name: "Électronique", value: 0, sales: 0, color: "#3b82f6" },
-      { name: "Vêtements", value: 0, sales: 0, color: "#10b981" },
-      { name: "Maison & Jardin", value: 0, sales: 0, color: "#f59e0b" },
-      { name: "Sport & Loisirs", value: 0, sales: 0, color: "#ef4444" },
-    ],
-    topProducts: [{ name: "Aucun produit", sales: 0, revenue: 0 }],
+    categories: [],
+    topProducts: [],
   },
 };
 
-// Données pour différents entrepôts
-const dataByWarehouse = {
-  all: { multiplier: 1, name: "Tous les entrepôts" },
-  main: { multiplier: 0.6, name: "Entrepôt Principal" },
-  south: { multiplier: 0.25, name: "Entrepôt Sud" },
-  north: { multiplier: 0.15, name: "Entrepôt Nord" },
-};
-
-// Composant Tooltip global
 const GlobalTooltip = ({
   x,
   y,
@@ -208,41 +203,10 @@ const GlobalTooltip = ({
   );
 };
 
-// Composant de chargement
-const LoadingSpinner = () => (
-  <div className="flex items-center justify-center p-8">
-    <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-    <span className="ml-2 text-lg">Chargement des données...</span>
-  </div>
-);
-
-// Composant d'erreur
-const ErrorMessage = ({
-  message,
-  onRetry,
-}: {
-  message: string;
-  onRetry: () => void;
-}) => (
-  <div className="flex flex-col items-center justify-center p-8 text-center">
-    <AlertCircle className="h-12 w-12 text-red-500 mb-4" />
-    <h3 className="text-lg font-semibold text-red-600 mb-2">
-      Erreur de chargement
-    </h3>
-    <p className="text-gray-600 mb-4 dark:text-gray-300">{message}</p>
-    <Button
-      onClick={onRetry}
-      variant="outline"
-      className=" bg-blue-500 text-white"
-    >
-      Réessayer
-    </Button>
-  </div>
-);
-
 export default function ReportsPage() {
+  // Déplacer TOUS les hooks ICI, à l'intérieur du composant
   const [selectedPeriod, setSelectedPeriod] = useState<Period>("week");
-  const [selectedWarehouse, setSelectedWarehouse] = useState("all");
+  const [selectedWarehouse, setSelectedWarehouse] = useState<string>("all");
   const [customDateRange, setCustomDateRange] = useState<{
     start?: Date;
     end?: Date;
@@ -251,7 +215,8 @@ export default function ReportsPage() {
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(
     null
   );
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [warehousesLoading, setWarehousesLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tooltip, setTooltip] = useState({
     visible: false,
@@ -259,40 +224,201 @@ export default function ReportsPage() {
     y: 0,
     content: "",
   });
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
 
-  // Chargement des données depuis l'API
-  const fetchData = async () => {
+  // Ajouter les hooks pour les données de stock
+  const [stockData, setStockData] = useState<StockData | null>(null);
+  const [stockLoading, setStockLoading] = useState(true);
+  const [stockError, setStockError] = useState<string | null>(null);
+  const [monnaie, setMonnaie] = useState("XOF");
+
+  // Récupération de la monnaie
+  useDetermineSympole(setMonnaie);
+
+  // Composant Tooltip personnalisé pour les bar charts
+  const CustomBarTooltip = ({
+    active,
+    payload,
+    label,
+  }: TooltipProps<number, string>) => {
+    if (active && payload && payload.length) {
+      const item = payload[0].payload as SalesData;
+      return (
+        <div className="bg-white p-3 border rounded-lg shadow-lg">
+          <p className="font-semibold text-gray-800 mb-2">{label}</p>
+          <div className="space-y-1">
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-600">Commandes:</span>
+              <span className="font-medium">{item.orders}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-600">Ventes:</span>
+              <span className="font-medium">
+                {formatCurrency(item.sales, monnaie)}
+              </span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-600">Profit:</span>
+              <span className="font-medium">
+                {formatCurrency(item.profit, monnaie)}
+              </span>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  // Composant Tooltip personnalisé pour les produits
+  const CustomProductTooltip = ({
+    active,
+    payload,
+    label,
+  }: TooltipProps<number, string>) => {
+    if (active && payload && payload.length) {
+      const product = payload[0].payload as TopProductData;
+      return (
+        <div className="bg-white p-4 border rounded-lg shadow-lg min-w-[200px]">
+          <p className="font-bold text-gray-800 mb-2">{product.name}</p>
+          <div className="space-y-2">
+            <div className="flex justify-between">
+              <span className="text-gray-600">Unités vendues:</span>
+              <span className="font-semibold">
+                {product.sales.toLocaleString()}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-600">Revenus:</span>
+              <span className="font-semibold">
+                {formatCurrency(product.revenue, monnaie)}
+              </span>
+            </div>
+            <div className="mt-2 pt-2 border-t">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">Valeur moyenne:</span>
+                <span className="font-semibold">
+                  {product.revenue > 0 && product.sales > 0
+                    ? formatCurrency(product.revenue / product.sales, monnaie)
+                    : "0"}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  const loadWarehouses = async () => {
+    try {
+      setWarehousesLoading(true);
+      setError(null);
+
+      console.log("🔄 Chargement des entrepôts...");
+      const res = await fetch("/api/warehouses", {
+        cache: "no-store",
+        headers: {
+          "Cache-Control": "no-cache",
+        },
+      });
+
+      if (!res.ok) {
+        throw new Error(
+          `Erreur ${res.status}: Impossible de charger les entrepôts`
+        );
+      }
+
+      const data = await res.json();
+      console.log("✅ Entrepos chargés:", data);
+
+      if (!Array.isArray(data)) {
+        throw new Error("Format de données invalide pour les entrepôts");
+      }
+
+      setWarehouses(data);
+
+      if (data.length === 0) {
+        console.warn("⚠️ Aucun entrepôt trouvé");
+        toast({
+          title: "Aucun entrepôt",
+          description: "Aucun entrepôt n'a été trouvé pour votre entreprise",
+          variant: "default",
+        });
+      }
+    } catch (err: any) {
+      console.error("❌ Erreur chargement entrepôts:", err);
+      setError(err.message);
+      toast({
+        title: "Erreur",
+        description: "Impossible de charger les entrepôts",
+        variant: "destructive",
+      });
+    } finally {
+      setWarehousesLoading(false);
+    }
+  };
+
+  const fetchReportData = async () => {
+    if (warehousesLoading && warehouses.length === 0) {
+      console.log("⏳ Attente du chargement des entrepôts...");
+      return;
+    }
+
     try {
       setLoading(true);
       setError(null);
-      console.log("🚀 Chargement des données depuis l'API...");
 
-      const response = await fetch("/api/report");
+      const params = new URLSearchParams({
+        period: selectedPeriod,
+        warehouse: selectedWarehouse,
+      });
+
+      if (isCustomPeriod && customDateRange.start && customDateRange.end) {
+        params.append("startDate", customDateRange.start.toISOString());
+        params.append("endDate", customDateRange.end.toISOString());
+      }
+
+      console.log("📤 Requête API avec params:", params.toString());
+
+      const response = await fetch(
+        `/api/dashboard/overview?${params.toString()}`,
+        {
+          cache: "no-store",
+          headers: {
+            "Cache-Control": "no-cache",
+          },
+        }
+      );
 
       if (!response.ok) {
-        throw new Error(`Erreur HTTP: ${response.status}`);
+        throw new Error(
+          `Erreur ${response.status}: Impossible de charger les données`
+        );
       }
 
       const data = await response.json();
-      console.log("✅ Données reçues de l'API:", data);
+      console.log("📊 Données reçues:", data);
 
       setDashboardData(data);
 
-      toast({
-        title: "Données chargées",
-        description: "Les données du dashboard ont été mises à jour",
-      });
-    } catch (err) {
-      const errorMessage =
-        err instanceof Error
-          ? err.message
-          : "Erreur lors du chargement des données";
-      console.error("❌ Erreur:", err);
-      setError(errorMessage);
+      const warehouseName =
+        selectedWarehouse === "all"
+          ? "tous les entrepôts"
+          : warehouses.find((w) => w.value === selectedWarehouse)?.label ||
+            selectedWarehouse;
 
       toast({
+        title: "Données chargées",
+        description: `Données pour ${warehouseName}`,
+      });
+    } catch (err: any) {
+      console.error("❌ Erreur chargement rapport:", err);
+      setError(err.message);
+      toast({
         title: "Erreur de chargement",
-        description: errorMessage,
+        description: err.message,
         variant: "destructive",
       });
     } finally {
@@ -300,12 +426,67 @@ export default function ReportsPage() {
     }
   };
 
-  // Initialisation des données
+  // Modifiez la fonction fetchStockData dans votre page
+  const fetchStockData = async () => {
+    try {
+      setStockLoading(true);
+      setStockError(null);
+
+      // Utiliser la vraie API de stock
+      const response = await fetch(
+        `/api/stock-analytics?warehouse=${selectedWarehouse}`
+      );
+
+      if (!response.ok) {
+        throw new Error(
+          `Erreur ${response.status}: Impossible de charger les données de stock`
+        );
+      }
+
+      const stockData: StockData = await response.json();
+      setStockData(stockData);
+    } catch (err: any) {
+      console.error("❌ Erreur chargement données stock:", err);
+      setStockError(err.message);
+
+      // Optionnel: données de secours minimales
+      setStockData({
+        totalProducts: 0,
+        averageStock: 0,
+        turnoverDays: 0,
+        stockoutRate: 0,
+        criticalAlerts: 0,
+        reorderAlerts: 0,
+        categories: [],
+        lastUpdate: "N/A",
+      });
+    } finally {
+      setStockLoading(false);
+    }
+  };
+
   useEffect(() => {
-    fetchData();
+    loadWarehouses();
   }, []);
 
-  // Gérer le changement de dates personnalisées
+  useEffect(() => {
+    if (!warehousesLoading && warehouses.length >= 0) {
+      fetchReportData();
+    }
+  }, [
+    selectedPeriod,
+    selectedWarehouse,
+    isCustomPeriod,
+    customDateRange,
+    warehousesLoading,
+  ]);
+
+  useEffect(() => {
+    if (selectedWarehouse && !warehousesLoading) {
+      fetchStockData();
+    }
+  }, [selectedWarehouse, warehousesLoading]);
+
   const handleDateChange = (
     startDate: Date | undefined,
     endDate: Date | undefined
@@ -322,159 +503,37 @@ export default function ReportsPage() {
     }
   };
 
-  // Obtenir les données actuelles basées sur les filtres
-  const getCurrentData = (): PeriodData => {
-    if (!dashboardData) return defaultData.week;
-
-    if (isCustomPeriod && customDateRange.start && customDateRange.end) {
-      return dashboardData.custom || defaultData.custom;
-    }
-
-    return (
-      dashboardData[selectedPeriod as keyof DashboardData] ||
-      defaultData[selectedPeriod as keyof DashboardData]
-    );
-  };
-
-  const currentData = getCurrentData();
-  const warehouseMultiplier =
-    dataByWarehouse[selectedWarehouse as keyof typeof dataByWarehouse]
-      .multiplier;
-
-  // Appliquer le multiplicateur d'entrepôt aux données
-  const salesData = currentData.sales.map((item) => ({
-    ...item,
-    sales: Math.round(item.sales * warehouseMultiplier),
-    orders: Math.round(item.orders * warehouseMultiplier),
-    profit: Math.round(item.profit * warehouseMultiplier),
-  }));
-
-  const kpis = {
-    revenue: Math.round(currentData.kpis.revenue * warehouseMultiplier),
-    orders: Math.round(currentData.kpis.orders * warehouseMultiplier),
-    clients: Math.round(currentData.kpis.clients * warehouseMultiplier),
-    stockout: currentData.kpis.stockout,
-  };
-
-  // Appliquer les filtres aux catégories
-  const categoryData = currentData.categories.map((category) => ({
-    ...category,
-    sales: Math.round(category.sales * warehouseMultiplier),
-  }));
-
-  // Appliquer les filtres aux top produits
-  const topProductsData = currentData.topProducts.map((product) => ({
-    ...product,
-    sales: Math.round(product.sales * warehouseMultiplier),
-    revenue: Math.round(product.revenue * warehouseMultiplier),
-  }));
-
-  // Fonction pour afficher le tooltip qui suit la souris
-  const showTooltip = (event: React.MouseEvent, content: string) => {
-    setTooltip({
-      visible: true,
-      x: event.clientX,
-      y: event.clientY,
-      content,
-    });
-  };
-
-  // Fonction pour mettre à jour la position du tooltip
-  const updateTooltip = (event: React.MouseEvent) => {
-    if (tooltip.visible) {
-      setTooltip((prev) => ({
-        ...prev,
-        x: event.clientX,
-        y: event.clientY,
-      }));
-    }
-  };
-
-  // Fonction pour masquer le tooltip
-  const hideTooltip = () => {
-    setTooltip({ visible: false, x: 0, y: 0, content: "" });
-  };
-
-  // // Fonction pour exporter en PDF
-  // const handleExportPDF = async () => {
-  //   toast({
-  //     title: "Export PDF en cours...",
-  //     description: "Génération du rapport PDF avec les données actuelles",
-  //   });
-
-  //   // Implémentation PDF simplifiée
-  //   setTimeout(() => {
-  //     toast({
-  //       title: "Export PDF réussi",
-  //       description: "Le rapport PDF a été téléchargé avec succès.",
-  //     });
-  //   }, 1000);
-  // };
-
-  // // Fonction pour exporter en Excel
-  // const handleExportExcel = () => {
-  //   toast({
-  //     title: "Export Excel en cours...",
-  //     description: "Génération du rapport Excel avec les données actuelles",
-  //   });
-
-  //   setTimeout(() => {
-  //     toast({
-  //       title: "Export Excel réussi",
-  //       description: "Le rapport Excel a été téléchargé avec succès.",
-  //     });
-  //   }, 1000);
-  // };
-
-  // Fonction pour exporter en PDF (rapport complet basé sur les données backend)
-  const [data, setData] = useState<DashboardData>(defaultData);
-  // Fonction pour exporter en PDF
   const handleExportPDF = async () => {
     if (!dashboardData) {
       toast({
         title: "Erreur d'export",
-        description: "Aucune donnée disponible pour l'export",
+        description: "Aucune donnée disponible",
         variant: "destructive",
       });
       return;
     }
 
-    // Fonction pour formater les nombres en français (sans espace)
-    const formatNumberFR = (num) => {
+    const currentData = getCurrentData();
+    const kpis = currentData.kpis;
+    const salesData = currentData.sales;
+    const categoryData = currentData.categories;
+    const topProductsData = currentData.topProducts;
+    const selectedWarehouseObj = warehouses.find(
+      (w) => w.value === selectedWarehouse
+    );
+
+    const formatNumberFR = (num: number) => {
       return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ");
     };
 
-    // Fonction pour formater les euros
-    const formatEuro = (amount) => {
-      return `€${formatNumberFR(amount)}`;
+    const formatEuro = (amount: number) => {
+      // return `€${formatNumberFR(amount)}`;
+      return `${formatCurrency(amount, monnaie)}`;
     };
-
-    const currentPeriodData = getCurrentData();
-    const salesData = currentPeriodData.sales.map((item) => ({
-      ...item,
-      sales: Math.round(item.sales * warehouseMultiplier),
-      orders: Math.round(item.orders * warehouseMultiplier),
-      profit: Math.round(item.profit * warehouseMultiplier),
-    }));
-    const kpis = {
-      revenue: Math.round(currentPeriodData.kpis.revenue * warehouseMultiplier),
-      orders: Math.round(currentPeriodData.kpis.orders * warehouseMultiplier),
-      clients: Math.round(currentPeriodData.kpis.clients * warehouseMultiplier),
-      stockout: currentPeriodData.kpis.stockout,
-    };
-    const categoryData = currentPeriodData.categories.map((category) => ({
-      ...category,
-      sales: Math.round(category.sales * warehouseMultiplier),
-    }));
-    const topProductsData = currentPeriodData.topProducts.map((product) => ({
-      ...product,
-      sales: Math.round(product.sales * warehouseMultiplier),
-      revenue: Math.round(product.revenue * warehouseMultiplier),
-    }));
 
     toast({
       title: "Export PDF en cours...",
-      description: "Génération du rapport PDF avec les données actuelles",
+      description: "Génération du rapport PDF",
     });
 
     try {
@@ -485,17 +544,12 @@ export default function ReportsPage() {
       const pageHeight = doc.internal.pageSize.getHeight();
       let yPosition = 20;
 
-      // Titre
       doc.setFontSize(20);
-      doc.setFont(undefined, "bold");
+      doc.setFont("helvetica", "bold");
       doc.text("RAPPORT STOCKPRO", pageWidth / 2, yPosition, {
         align: "center",
       });
       yPosition += 15;
-
-      // Infos générales
-      doc.setFontSize(12);
-      doc.setFont(undefined, "normal");
 
       const periodText = isCustomPeriod
         ? `Du ${customDateRange.start?.toLocaleDateString(
@@ -509,6 +563,13 @@ export default function ReportsPage() {
         ? "Ce trimestre"
         : "Cette année";
 
+      const warehouseText =
+        selectedWarehouse === "all"
+          ? "Tous les entrepôts"
+          : selectedWarehouseObj?.label || selectedWarehouse;
+
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "normal");
       doc.text(
         `Généré le: ${new Date().toLocaleDateString("fr-FR")}`,
         20,
@@ -517,25 +578,16 @@ export default function ReportsPage() {
       yPosition += 8;
       doc.text(`Période: ${periodText}`, 20, yPosition);
       yPosition += 8;
-      doc.text(
-        `Entrepôt: ${
-          dataByWarehouse[selectedWarehouse as keyof typeof dataByWarehouse]
-            .name
-        }`,
-        20,
-        yPosition
-      );
+      doc.text(`Entrepôt: ${warehouseText}`, 20, yPosition);
       yPosition += 20;
 
-      // KPIs
       doc.setFontSize(16);
-      doc.setFont(undefined, "bold");
+      doc.setFont("helvetica", "bold");
       doc.text("INDICATEURS CLÉS", 20, yPosition);
       yPosition += 15;
 
       doc.setFontSize(11);
-      doc.setFont(undefined, "normal");
-
+      doc.setFont("helvetica", "normal");
       const kpiData = [
         ["Chiffre d'affaires", formatEuro(kpis.revenue)],
         ["Commandes", kpis.orders.toString()],
@@ -547,30 +599,29 @@ export default function ReportsPage() {
         const x = 20 + (index % 2) * 90;
         const y = yPosition + Math.floor(index / 2) * 15;
         doc.text(`${label}:`, x, y);
-        doc.setFont(undefined, "bold");
+        doc.setFont("helvetica", "bold");
         doc.text(value, x + 60, y);
-        doc.setFont(undefined, "normal");
+        doc.setFont("helvetica", "normal");
       });
       yPosition += 40;
 
-      // Données de ventes
       doc.setFontSize(16);
-      doc.setFont(undefined, "bold");
+      doc.setFont("helvetica", "bold");
       doc.text("DONNÉES DE VENTES", 20, yPosition);
       yPosition += 15;
 
       doc.setFontSize(10);
-      doc.setFont(undefined, "bold");
+      doc.setFont("helvetica", "bold");
       doc.text("Période", 20, yPosition);
-      doc.text("Ventes (€)", 60, yPosition);
+      doc.text(`Ventes (${formatCurrency(0, monnaie)})`, 60, yPosition);
       doc.text("Commandes", 100, yPosition);
-      doc.text("Profit (€)", 140, yPosition);
+      doc.text(`Profit (${formatCurrency(0, monnaie)})`, 140, yPosition);
       yPosition += 8;
 
       doc.line(20, yPosition, 180, yPosition);
       yPosition += 5;
 
-      doc.setFont(undefined, "normal");
+      doc.setFont("helvetica", "normal");
       salesData.forEach((item) => {
         if (yPosition > pageHeight - 30) {
           doc.addPage();
@@ -584,28 +635,27 @@ export default function ReportsPage() {
       });
       yPosition += 15;
 
-      // Top produits
       if (yPosition > pageHeight - 80) {
         doc.addPage();
         yPosition = 20;
       }
 
       doc.setFontSize(16);
-      doc.setFont(undefined, "bold");
+      doc.setFont("helvetica", "bold");
       doc.text("TOP PRODUITS", 20, yPosition);
       yPosition += 15;
 
       doc.setFontSize(10);
-      doc.setFont(undefined, "bold");
+      doc.setFont("helvetica", "bold");
       doc.text("Produit", 20, yPosition);
       doc.text("Ventes", 120, yPosition);
-      doc.text("Revenus (€)", 150, yPosition);
+      doc.text(`Revenus (${formatCurrency(0, monnaie)})`, 150, yPosition);
       yPosition += 8;
 
       doc.line(20, yPosition, 180, yPosition);
       yPosition += 5;
 
-      doc.setFont(undefined, "normal");
+      doc.setFont("helvetica", "normal");
       topProductsData.slice(0, 7).forEach((product) => {
         if (yPosition > pageHeight - 30) {
           doc.addPage();
@@ -622,28 +672,27 @@ export default function ReportsPage() {
       });
       yPosition += 15;
 
-      // Catégories
       if (yPosition > pageHeight - 60) {
         doc.addPage();
         yPosition = 20;
       }
 
       doc.setFontSize(16);
-      doc.setFont(undefined, "bold");
+      doc.setFont("helvetica", "bold");
       doc.text("RÉPARTITION PAR CATÉGORIE", 20, yPosition);
       yPosition += 15;
 
       doc.setFontSize(10);
-      doc.setFont(undefined, "bold");
+      doc.setFont("helvetica", "bold");
       doc.text("Catégorie", 20, yPosition);
       doc.text("Pourcentage", 100, yPosition);
-      doc.text("Ventes (€)", 140, yPosition);
+      doc.text(`Ventes (${formatCurrency(0, monnaie)})`, 140, yPosition);
       yPosition += 8;
 
       doc.line(20, yPosition, 180, yPosition);
       yPosition += 5;
 
-      doc.setFont(undefined, "normal");
+      doc.setFont("helvetica", "normal");
       categoryData.forEach((category) => {
         if (yPosition > pageHeight - 30) {
           doc.addPage();
@@ -655,12 +704,11 @@ export default function ReportsPage() {
         yPosition += 8;
       });
 
-      // Pied de page
       const totalPages = doc.internal.getNumberOfPages();
       for (let i = 1; i <= totalPages; i++) {
         doc.setPage(i);
         doc.setFontSize(8);
-        doc.setFont(undefined, "normal");
+        doc.setFont("helvetica", "normal");
         doc.text(
           `Page ${i} sur ${totalPages}`,
           pageWidth / 2,
@@ -684,65 +732,50 @@ export default function ReportsPage() {
 
       toast({
         title: "Export PDF réussi",
-        description: "Le rapport PDF a été téléchargé avec succès.",
+        description: "Le rapport PDF a été téléchargé",
       });
     } catch (error) {
-      console.error("Erreur lors de la génération du PDF:", error);
+      console.error("Erreur PDF:", error);
       toast({
         title: "Erreur d'export",
-        description: "Une erreur est survenue lors de la génération du PDF.",
+        description: "Erreur lors de la génération du PDF",
         variant: "destructive",
       });
     }
   };
-  // Fonction pour exporter en Excel (XLSX)
+
   const handleExportExcel = async () => {
     if (!dashboardData) {
       toast({
         title: "Erreur d'export",
-        description: "Aucune donnée disponible pour l'export",
+        description: "Aucune donnée disponible",
         variant: "destructive",
       });
       return;
     }
 
+    const currentData = getCurrentData();
+    const kpis = currentData.kpis;
+    const salesData = currentData.sales;
+    const categoryData = currentData.categories;
+    const topProductsData = currentData.topProducts;
+    const selectedWarehouseObj = warehouses.find(
+      (w) => w.value === selectedWarehouse
+    );
+
     toast({
       title: "Export Excel en cours...",
-      description: "Génération du rapport Excel avec les données actuelles",
+      description: "Génération du rapport Excel",
     });
 
     try {
-      const currentPeriodData = getCurrentData();
-      const salesData = currentPeriodData.sales.map((item) => ({
-        ...item,
-        sales: Math.round(item.sales * warehouseMultiplier),
-        orders: Math.round(item.orders * warehouseMultiplier),
-        profit: Math.round(item.profit * warehouseMultiplier),
-      }));
-      const kpis = {
-        revenue: Math.round(
-          currentPeriodData.kpis.revenue * warehouseMultiplier
-        ),
-        orders: Math.round(currentPeriodData.kpis.orders * warehouseMultiplier),
-        clients: Math.round(
-          currentPeriodData.kpis.clients * warehouseMultiplier
-        ),
-        stockout: currentPeriodData.kpis.stockout,
-      };
-      const categoryData = currentPeriodData.categories.map((category) => ({
-        ...category,
-        sales: Math.round(category.sales * warehouseMultiplier),
-      }));
-      const topProductsData = currentPeriodData.topProducts.map((product) => ({
-        ...product,
-        sales: Math.round(product.sales * warehouseMultiplier),
-        revenue: Math.round(product.revenue * warehouseMultiplier),
-      }));
-
-      // Créer un nouveau classeur
       const wb = XLSX.utils.book_new();
 
-      // 1. Feuille des indicateurs clés
+      const warehouseText =
+        selectedWarehouse === "all"
+          ? "Tous les entrepôts"
+          : selectedWarehouseObj?.label || selectedWarehouse;
+
       const kpiSheetData = [
         ["RAPPORT STOCKPRO - DONNÉES DASHBOARD"],
         [],
@@ -761,14 +794,10 @@ export default function ReportsPage() {
             ? "Ce trimestre"
             : "Cette année",
         ],
-        [
-          "Entrepôt",
-          dataByWarehouse[selectedWarehouse as keyof typeof dataByWarehouse]
-            .name,
-        ],
+        ["Entrepôt", warehouseText],
         [],
         ["INDICATEURS CLÉS"],
-        ["Chiffre d'affaires (€)", kpis.revenue],
+        [`Chiffre d'affaires (${formatCurrency(0, monnaie)})`, kpis.revenue],
         ["Commandes", kpis.orders],
         ["Clients actifs", kpis.clients],
         ["Taux de rupture (%)", kpis.stockout],
@@ -777,9 +806,13 @@ export default function ReportsPage() {
       const kpiSheet = XLSX.utils.aoa_to_sheet(kpiSheetData);
       XLSX.utils.book_append_sheet(wb, kpiSheet, "Indicateurs");
 
-      // 2. Feuille des ventes
       const salesSheetData = [
-        ["Période", "Ventes (€)", "Commandes", "Profit (€)"],
+        [
+          "Période",
+          `Ventes (${formatCurrency(0, monnaie)})`,
+          "Commandes",
+          `Profit (${formatCurrency(0, monnaie)})`,
+        ],
         ...salesData.map((item) => [
           item.month,
           item.sales,
@@ -791,9 +824,12 @@ export default function ReportsPage() {
       const salesSheet = XLSX.utils.aoa_to_sheet(salesSheetData);
       XLSX.utils.book_append_sheet(wb, salesSheet, "Ventes");
 
-      // 3. Feuille des top produits
       const productsSheetData = [
-        ["Produit", "Unités vendues", "Revenus (€)"],
+        [
+          "Produit",
+          "Unités vendues",
+          `Revenus (${formatCurrency(0, monnaie)})`,
+        ],
         ...topProductsData.map((product) => [
           product.name,
           product.sales,
@@ -804,9 +840,12 @@ export default function ReportsPage() {
       const productsSheet = XLSX.utils.aoa_to_sheet(productsSheetData);
       XLSX.utils.book_append_sheet(wb, productsSheet, "Top Produits");
 
-      // 4. Feuille des catégories
       const categoriesSheetData = [
-        ["Catégorie", "Pourcentage (%)", "Ventes (€)"],
+        [
+          "Catégorie",
+          "Pourcentage (%)",
+          `Ventes (${formatCurrency(0, monnaie)})`,
+        ],
         ...categoryData.map((category) => [
           category.name,
           category.value,
@@ -817,7 +856,6 @@ export default function ReportsPage() {
       const categoriesSheet = XLSX.utils.aoa_to_sheet(categoriesSheetData);
       XLSX.utils.book_append_sheet(wb, categoriesSheet, "Catégories");
 
-      // 5. Feuille de synthèse
       const summarySheetData = [
         ["SYNTHÈSE DU RAPPORT"],
         [],
@@ -860,43 +898,26 @@ export default function ReportsPage() {
       const summarySheet = XLSX.utils.aoa_to_sheet(summarySheetData);
       XLSX.utils.book_append_sheet(wb, summarySheet, "Synthèse");
 
-      // Définir la largeur des colonnes
-      const colWidths = [{ wch: 25 }, { wch: 15 }, { wch: 15 }, { wch: 15 }];
-
-      [
-        kpiSheet,
-        salesSheet,
-        productsSheet,
-        categoriesSheet,
-        summarySheet,
-      ].forEach((sheet) => {
-        sheet["!cols"] = colWidths;
-      });
-
-      // Générer le fichier
       const fileName = `rapport-stockpro-${selectedPeriod}-${selectedWarehouse}-${
         new Date().toISOString().split("T")[0]
       }.xlsx`;
-
       XLSX.writeFile(wb, fileName);
 
       toast({
         title: "Export Excel réussi",
-        description: "Le rapport XLSX a été téléchargé avec succès.",
+        description: "Le rapport XLSX a été téléchargé",
       });
     } catch (error) {
-      console.error("Erreur lors de la génération du XLSX:", error);
+      console.error("Erreur Excel:", error);
       toast({
         title: "Erreur d'export",
-        description:
-          "Une erreur est survenue lors de la génération du fichier Excel.",
+        description: "Erreur lors de la génération du fichier Excel",
         variant: "destructive",
       });
     }
   };
 
-  // Fonction pour gérer le changement de période
-  const handlePeriodChange = (value: string) => {
+  const handlePeriodChange = (value: Period) => {
     setSelectedPeriod(value);
     setIsCustomPeriod(false);
     toast({
@@ -913,27 +934,87 @@ export default function ReportsPage() {
     });
   };
 
-  // Fonction pour gérer le changement d'entrepôt
   const handleWarehouseChange = (value: string) => {
     setSelectedWarehouse(value);
+    const warehouseName =
+      value === "all"
+        ? "Tous les entrepôts"
+        : warehouses.find((w) => w.value === value)?.label || value;
     toast({
       title: "Entrepôt mis à jour",
-      description: `Filtrage par: ${
-        dataByWarehouse[value as keyof typeof dataByWarehouse].name
-      }`,
+      description: `Filtrage par: ${warehouseName}`,
     });
   };
 
-  // Affichage du chargement
-  if (loading) {
+  const reloadWarehouses = async () => {
+    setIsCustomPeriod(false);
+    await loadWarehouses();
+    toast({
+      title: "Entrepôts rechargés",
+      description: `Liste des entrepôts mise à jour (${warehouses.length} trouvés)`,
+    });
+  };
+
+  const getCurrentData = (): PeriodData => {
+    if (!dashboardData) return defaultData.week;
+
+    if (isCustomPeriod && customDateRange.start && customDateRange.end) {
+      // Si sales est vide pour custom, utiliser week à la place
+      const customData = dashboardData.custom || defaultData.custom;
+      if (customData.sales.length === 0) {
+        return {
+          ...customData,
+          sales: dashboardData.week?.sales || defaultData.week.sales,
+        };
+      }
+      return customData;
+    }
+
+    return dashboardData[selectedPeriod] || defaultData[selectedPeriod];
+  };
+
+  const currentData = getCurrentData();
+  const selectedWarehouseObj = warehouses.find(
+    (w) => w.value === selectedWarehouse
+  );
+
+  const salesData = currentData.sales;
+  const kpis = currentData.kpis;
+  const categoryData = currentData.categories;
+  const topProductsData = currentData.topProducts;
+
+  const showTooltip = (event: React.MouseEvent, content: string) => {
+    setTooltip({
+      visible: true,
+      x: event.clientX,
+      y: event.clientY,
+      content,
+    });
+  };
+
+  const updateTooltip = (event: React.MouseEvent) => {
+    if (tooltip.visible) {
+      setTooltip((prev) => ({
+        ...prev,
+        x: event.clientX,
+        y: event.clientY,
+      }));
+    }
+  };
+
+  const hideTooltip = () => {
+    setTooltip({ visible: false, x: 0, y: 0, content: "" });
+  };
+
+  if (warehousesLoading) {
     return (
-      <div className="flex min-h-screen bg-gray-50">
+      <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900">
         <Sidebar />
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
             <p className="mt-4 text-gray-600 dark:text-gray-300">
-              Chargement des données stock...
+              Chargement des entrepôts...
             </p>
           </div>
         </div>
@@ -941,31 +1022,41 @@ export default function ReportsPage() {
     );
   }
 
-  // Affichage des erreurs
-  if (error) {
+  if (error && warehouses.length === 0) {
     return (
-      <div className="flex min-h-screen bg-gray-50">
+      <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900">
         <Sidebar />
         <div className="flex-1 flex items-center justify-center">
-          <ErrorMessage message={error} onRetry={fetchData} />
+          <div className="flex flex-col items-center justify-center p-8 text-center">
+            <AlertCircle className="h-12 w-12 text-red-500 mb-4" />
+            <h3 className="text-lg font-semibold text-red-600 mb-2">
+              Erreur de chargement
+            </h3>
+            <p className="text-gray-600 mb-4 dark:text-gray-300">{error}</p>
+            <Button
+              onClick={() => {
+                setError(null);
+                loadWarehouses();
+              }}
+              variant="outline"
+              className="bg-blue-500 text-white hover:bg-blue-600"
+            >
+              Réessayer
+            </Button>
+          </div>
         </div>
       </div>
     );
   }
 
-  console.log("KPIs data:", kpis);
-  console.log("Revenue:", kpis.revenue, "Type:", typeof kpis.revenue);
-  console.log("Orders:", kpis.orders, "Type:", typeof kpis.orders);
-
   return (
-    <RoleGuard allowedRoles={["admin"]}>
-      <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900 dark:text-white">
+    <RoleGuard allowedRoles={["admin", "manager"]}>
+      <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900 dark:text-white overflow-auto">
         <Sidebar />
 
-        <div className="flex-1 flex flex-col">
-          {/* Header */}
-          <header className="bg-white border-b border-gray-200 px-6 py-4 dark:bg-gray-900 dark:text-white">
-            <div className="flex-1 lg:flex items-center lg:justify-between">
+        <div className="flex-1 flex flex-col overflow-auto">
+          <header className="bg-white border-b border-gray-200 px-6 py-4 dark:bg-gray-900">
+            <div className="flex-1 md:flex items-center justify-between w-full">
               <div className="ml-10 lg:ml-0">
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-300">
                   Rapports
@@ -974,28 +1065,69 @@ export default function ReportsPage() {
                   Analyses et statistiques détaillées - Données en temps réel
                 </p>
               </div>
-              <div className="flex md:flex-1 mt-1 md:mt-1 space-x-2">
-                <Button variant="outline" onClick={handleExportPDF}>
-                  <FileText className="h-4 w-4 mr-2" />
-                  Exporter PDF
-                </Button>
-                <Button variant="outline" onClick={handleExportExcel}>
-                  <Download className="h-4 w-4 mr-2" />
-                  Exporter Excel
-                </Button>
+              <div className="flex  mt-1 md:mt-1 space-x-2">
+                <div className="hidden md:block">
+                  <Button
+                    variant="outline"
+                    onClick={handleExportPDF}
+                    disabled={!dashboardData || loading}
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    Exporter PDF
+                  </Button>
+                </div>
+                <div className="hidden md:block">
+                  <Button
+                    variant="outline"
+                    onClick={handleExportExcel}
+                    disabled={!dashboardData || loading}
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    Exporter Excel
+                  </Button>
+                </div>
+                <div className="flex justify-between w-full md:hidden">
+                  <div className="md:hidden">
+                    <Button
+                      variant="outline"
+                      onClick={handleExportPDF}
+                      disabled={!dashboardData || loading}
+                    >
+                      <Download className="h-4 w-4 mr-2" />
+                      PDF
+                    </Button>
+                  </div>
+                  <div className="md:hidden">
+                    <Button
+                      variant="outline"
+                      onClick={handleExportExcel}
+                      disabled={!dashboardData || loading}
+                    >
+                      <Download className="h-4 w-4 mr-2" />
+                      Excel
+                    </Button>
+                  </div>
+                </div>
+
                 <div className="hidden lg:block">
-                  <Button variant="outline" onClick={fetchData}>
-                    <Loader2 className="h-4 w-4 mr-2" />
-                    Actualiser
+                  <Button
+                    variant="outline"
+                    onClick={reloadWarehouses}
+                    disabled={loading}
+                  >
+                    <Loader2
+                      className={`h-4 w-4 mr-2 ${
+                        loading ? "animate-spin" : ""
+                      }`}
+                    />
+                    {loading ? "Chargement..." : "Actualiser"}
                   </Button>
                 </div>
               </div>
             </div>
           </header>
 
-          {/* Main Content */}
           <main className="flex-1 p-6">
-            {/* Filters */}
             <Card className="mb-6">
               <CardContent className="p-6">
                 <div className="flex flex-col md:flex-row gap-4">
@@ -1006,6 +1138,7 @@ export default function ReportsPage() {
                     <Select
                       value={selectedPeriod}
                       onValueChange={handlePeriodChange}
+                      disabled={loading}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Sélectionner une période" />
@@ -1019,23 +1152,54 @@ export default function ReportsPage() {
                     </Select>
                   </div>
                   <div className="flex-1">
-                    <label className="block text-sm font-medium text-gray-700 mb-2 dark:text-gray-400">
-                      Entrepôt
-                    </label>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-400">
+                        Entrepôt
+                      </label>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={reloadWarehouses}
+                        className="h-6 px-2 text-xs"
+                        disabled={warehousesLoading}
+                      >
+                        <Loader2
+                          className={`h-3 w-3 mr-1 ${
+                            warehousesLoading ? "animate-spin" : ""
+                          }`}
+                        />
+                        Actualiser
+                      </Button>
+                    </div>
                     <Select
                       value={selectedWarehouse}
                       onValueChange={handleWarehouseChange}
+                      disabled={loading || warehousesLoading}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Sélectionner un entrepôt" />
+                        <SelectValue placeholder="Sélectionner un entrepôt">
+                          {selectedWarehouse === "all"
+                            ? "Tous les entrepôts"
+                            : warehouses.find(
+                                (w) => w.value === selectedWarehouse
+                              )?.label || "Sélectionner"}
+                        </SelectValue>
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">Tous les entrepôts</SelectItem>
-                        <SelectItem value="main">Entrepôt Principal</SelectItem>
-                        <SelectItem value="south">Entrepôt Sud</SelectItem>
-                        <SelectItem value="north">Entrepôt Nord</SelectItem>
+                        {warehouses.map((warehouse) => (
+                          <SelectItem
+                            key={warehouse.id}
+                            value={warehouse.value}
+                          >
+                            {warehouse.label}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {warehouses.length} entrepôt(s) disponible(s)
+                    </p>
                   </div>
                   <div className="flex-1">
                     <label className="block text-sm font-medium text-gray-700 mb-2 dark:text-gray-400">
@@ -1044,400 +1208,961 @@ export default function ReportsPage() {
                         <span className="text-green-600 text-xs">(Actif)</span>
                       )}
                     </label>
-                    <DatePickerRange onDateChange={handleDateChange} />
+                    <div className="overflow-auto">
+                      <DatePickerRange
+                        onDateChange={handleDateChange}
+                        disabled={loading}
+                      />
+                    </div>
                   </div>
                 </div>
+
+                {error && (
+                  <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-md">
+                    <div className="flex items-center">
+                      <AlertCircle className="h-5 w-5 text-red-500 mr-2" />
+                      <p className="text-red-700 text-sm">{error}</p>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
-            {/* KPI Cards - Dynamiques depuis l'API */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-              <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-600 dark:text-gray-300">
-                        Chiffre d'affaires
-                      </p>
-                      <p className="text-2xl font-bold">
-                        €{kpis.revenue ? kpis.revenue.toLocaleString() : "0"}
-                      </p>
-                      <p className="text-sm text-green-600 flex items-center mt-1">
-                        <TrendingUp className="h-4 w-4 mr-1" />
-                        Données en direct
-                      </p>
-                    </div>
-                    <DollarSign className="h-8 w-8 text-green-600" />
-                  </div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-600 dark:text-gray-300">
-                        Commandes
-                      </p>
-                      <p className="text-2xl font-bold">
-                        {kpis.orders.toLocaleString()}
-                      </p>
-                      <p className="text-sm text-green-600 flex items-center mt-1">
-                        <TrendingUp className="h-4 w-4 mr-1" />
-                        Données en direct
-                      </p>
-                    </div>
-                    <ShoppingCart className="h-8 w-8 text-blue-600" />
-                  </div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-600 dark:text-gray-300">
-                        Clients actifs
-                      </p>
-                      <p className="text-2xl font-bold">
-                        {kpis.clients.toLocaleString()}
-                      </p>
-                      <p className="text-sm text-green-600 flex items-center mt-1">
-                        <TrendingUp className="h-4 w-4 mr-1" />
-                        Données en direct
-                      </p>
-                    </div>
-                    <Users className="h-8 w-8 text-purple-600" />
-                  </div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-600 dark:text-gray-300">
-                        Taux de rupture
-                      </p>
-                      <p className="text-2xl font-bold">{kpis.stockout}%</p>
-                      <p className="text-sm text-green-600 flex items-center mt-1">
-                        <TrendingDown className="h-4 w-4 mr-1" />
-                        Données en direct
-                      </p>
-                    </div>
-                    <Package className="h-8 w-8 text-orange-600" />
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Charts Section */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-              {/* Évolution des ventes */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Évolution des ventes et profits</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="h-80 relative" onMouseMove={updateTooltip}>
-                    <AreaChart
-                      style={{
-                        width: "100%",
-                        maxWidth: "700px",
-                        maxHeight: "70vh",
-                        aspectRatio: 1.618,
-                      }}
-                      responsive
-                      data={salesData}
-                      margin={{
-                        top: 20,
-                        right: 0,
-                        left: 0,
-                        bottom: 5,
-                      }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="month" angle={-45} textAnchor="end" />
-                      <YAxis width="auto" />
-                      <Tooltip />
-                      <Area
-                        type="monotone"
-                        dataKey="sales"
-                        stackId="1"
-                        stroke="#8884d8"
-                        fill="#8884d8"
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey="profit"
-                        stackId="1"
-                        stroke="#ffc658"
-                        fill="#ffc658"
-                      />
-                    </AreaChart>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Répartition par catégorie - Dynamique depuis l'API */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Répartition des ventes par catégorie</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div
-                    className="h-80 flex items-center justify-center relative"
-                    onMouseMove={updateTooltip}
-                  >
-                    <svg width="280" height="280" viewBox="0 0 280 280">
-                      {categoryData.map((category, index) => {
-                        const startAngle = index * 90;
-                        const endAngle = (index + 1) * 90;
-                        const startRad = (startAngle * Math.PI) / 180;
-                        const endRad = (endAngle * Math.PI) / 180;
-
-                        const x1 = 140 + 80 * Math.cos(startRad);
-                        const y1 = 140 + 80 * Math.sin(startRad);
-                        const x2 = 140 + 80 * Math.cos(endRad);
-                        const y2 = 140 + 80 * Math.sin(endRad);
-
-                        return (
-                          <path
-                            key={index}
-                            d={`M 140 140 L ${x1} ${y1} A 80 80 0 0 1 ${x2} ${y2} Z`}
-                            fill={category.color}
-                            stroke="white"
-                            strokeWidth="2"
-                            className="cursor-pointer hover:opacity-80 transition-opacity"
-                            onMouseEnter={(e) =>
-                              showTooltip(
-                                e,
-                                `<strong>${category.name}</strong><br/>${
-                                  category.value
-                                }% des ventes<br/>€${category.sales.toLocaleString()} de CA`
-                              )
-                            }
-                            onMouseLeave={hideTooltip}
-                          />
-                        );
-                      })}
-                    </svg>
-                  </div>
-                  <div className="mt-4 grid grid-cols-2 gap-2">
-                    {categoryData.map((category, index) => (
-                      <div key={index} className="flex items-center space-x-2">
-                        <div
-                          className="w-3 h-3 rounded-full"
-                          style={{ backgroundColor: category.color }}
-                        ></div>
-                        <span className="text-sm">{category.name}</span>
-                        <span className="text-sm font-medium ml-auto">
-                          {category.value}%
-                        </span>
+            {loading ? (
+              <div className="flex items-center justify-center p-12">
+                <div className="text-center">
+                  <Loader2 className="h-12 w-12 animate-spin mx-auto text-blue-600" />
+                  <p className="mt-4 text-gray-600 dark:text-gray-300">
+                    Chargement des données pour{" "}
+                    {selectedWarehouse === "all"
+                      ? "tous les entrepôts"
+                      : warehouses.find((w) => w.value === selectedWarehouse)
+                          ?.label || selectedWarehouse}
+                    ...
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                  <Card>
+                    <CardContent className="p-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-gray-600 dark:text-gray-300">
+                            Chiffre d'affaires
+                          </p>
+                          <p className="text-2xl font-bold">
+                            {kpis.revenue
+                              ? formatCurrency(kpis.revenue, monnaie)
+                              : "0"}
+                          </p>
+                          <p className="text-sm text-green-600 flex items-center mt-1">
+                            <TrendingUp className="h-4 w-4 mr-1" />
+                            Données en direct
+                          </p>
+                        </div>
+                        <DollarSign className="h-8 w-8 text-green-600" />
                       </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-gray-600 dark:text-gray-300">
+                            Commandes
+                          </p>
+                          <p className="text-2xl font-bold">
+                            {kpis.orders.toLocaleString()}
+                          </p>
+                          <p className="text-sm text-green-600 flex items-center mt-1">
+                            <TrendingUp className="h-4 w-4 mr-1" />
+                            Données en direct
+                          </p>
+                        </div>
+                        <ShoppingCart className="h-8 w-8 text-blue-600" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-gray-600 dark:text-gray-300">
+                            Clients actifs
+                          </p>
+                          <p className="text-2xl font-bold">
+                            {kpis.clients.toLocaleString()}
+                          </p>
+                          <p className="text-sm text-green-600 flex items-center mt-1">
+                            <TrendingUp className="h-4 w-4 mr-1" />
+                            Données en direct
+                          </p>
+                        </div>
+                        <Users className="h-8 w-8 text-purple-600" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-gray-600 dark:text-gray-300">
+                            Taux de rupture
+                          </p>
+                          <p className="text-2xl font-bold">{kpis.stockout}%</p>
+                          <p className="text-sm text-green-600 flex items-center mt-1">
+                            <TrendingDown className="h-4 w-4 mr-1" />
+                            Données en direct
+                          </p>
+                        </div>
+                        <Package className="h-8 w-8 text-orange-600" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
 
-            {/* Graphique des commandes mensuelles - Dynamique depuis l'API */}
-            <div className="mb-8">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Nombre de commandes par période</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="h-80 relative" onMouseMove={updateTooltip}>
-                    <svg width="100%" height="100%" viewBox="0 0 600 300">
-                      {/* Grid */}
-                      <defs>
-                        <pattern
-                          id="barGrid"
-                          width="50"
-                          height="40"
-                          patternUnits="userSpaceOnUse"
-                        >
-                          <path
-                            d="M 50 0 L 0 0 0 40"
-                            fill="none"
-                            stroke="#f0f0f0"
-                            strokeWidth="1"
-                          />
-                        </pattern>
-                      </defs>
-                      <rect width="100%" height="100%" fill="url(#barGrid)" />
-
-                      {/* Interactive Bars */}
-                      {salesData.map((item, i) => {
-                        const maxOrders = Math.max(
-                          ...salesData.map((d) => d.orders)
-                        );
-                        const barHeight =
-                          maxOrders > 0 ? (item.orders / maxOrders) * 200 : 0;
-                        const x =
-                          50 + i * (500 / Math.max(salesData.length, 1));
-                        const y = 250 - barHeight;
-                        return (
-                          <g key={i}>
-                            <rect
-                              x={x - 15}
-                              y={y}
-                              width="30"
-                              height={barHeight}
-                              fill="#10b981"
-                              rx="4"
-                              className="cursor-pointer hover:opacity-80 transition-opacity"
-                              onMouseEnter={(e) =>
-                                showTooltip(
-                                  e,
-                                  `<strong>${
-                                    item.month
-                                  }</strong><br/>Commandes: ${
-                                    item.orders
-                                  }<br/>Ventes: €${item.sales.toLocaleString()}`
-                                )
-                              }
-                              onMouseLeave={hideTooltip}
-                            />
-                            <text
-                              x={x}
-                              y={y - 5}
-                              textAnchor="middle"
-                              fontSize="10"
-                              fill="#666"
+                <div className="space-y-8">
+                  {/* Première rangée : KPI Principaux */}
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <Card className="lg:col-span-2">
+                      <CardHeader>
+                        <div className="flex items-center justify-between">
+                          <CardTitle>Évolution des ventes et profits</CardTitle>
+                          <div className="text-sm text-gray-500">
+                            Période:{" "}
+                            {selectedPeriod === "week"
+                              ? "7 jours"
+                              : selectedPeriod === "month"
+                              ? "30 jours"
+                              : selectedPeriod === "quarter"
+                              ? "Trimestre"
+                              : "Année"}
+                          </div>
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="h-72">
+                          <ResponsiveContainer>
+                            <AreaChart
+                              width={800}
+                              height={300}
+                              data={salesData}
+                              margin={{
+                                top: 10,
+                                right: 30,
+                                left: 40,
+                                bottom: 0,
+                              }}
                             >
-                              {item.orders}
-                            </text>
-                            <text
-                              x={x}
-                              y="270"
-                              textAnchor="middle"
-                              fontSize="11"
-                              fill="#666"
-                            >
-                              {item.month}
-                            </text>
-                          </g>
-                        );
-                      })}
-                    </svg>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
+                              <defs>
+                                <linearGradient
+                                  id="colorSales"
+                                  x1="0"
+                                  y1="0"
+                                  x2="0"
+                                  y2="1"
+                                >
+                                  <stop
+                                    offset="5%"
+                                    stopColor="#8884d8"
+                                    stopOpacity={0.8}
+                                  />
+                                  <stop
+                                    offset="95%"
+                                    stopColor="#8884d8"
+                                    stopOpacity={0}
+                                  />
+                                </linearGradient>
+                                <linearGradient
+                                  id="colorProfit"
+                                  x1="0"
+                                  y1="0"
+                                  x2="0"
+                                  y2="1"
+                                >
+                                  <stop
+                                    offset="5%"
+                                    stopColor="#ffc658"
+                                    stopOpacity={0.8}
+                                  />
+                                  <stop
+                                    offset="95%"
+                                    stopColor="#ffc658"
+                                    stopOpacity={0}
+                                  />
+                                </linearGradient>
+                              </defs>
+                              <CartesianGrid
+                                strokeDasharray="3 3"
+                                stroke="#f0f0f0"
+                              />
+                              <XAxis
+                                dataKey="month"
+                                axisLine={false}
+                                tickLine={false}
+                                tick={{ fontSize: 12 }}
+                                padding={{ left: 10, right: 10 }}
+                              />
+                              <YAxis
+                                axisLine={false}
+                                tickLine={false}
+                                tick={{ fontSize: 12 }}
+                                tickFormatter={(value: number) =>
+                                  `${formatCurrency(value, monnaie)}`
+                                }
+                                width={45}
+                              />
+                              <RechartsTooltip
+                                formatter={(
+                                  value: any,
+                                  name: any,
+                                  props: any
+                                ) => {
+                                  let displayName = "Ventes";
 
-            {/* Detailed Reports */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Top produits - Dynamique depuis l'API */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Top produits les plus vendus</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="h-80 relative" onMouseMove={updateTooltip}>
-                    <svg width="100%" height="100%" viewBox="0 0 500 300">
-                      {/* Grid */}
-                      <defs>
-                        <pattern
-                          id="productGrid"
-                          width="50"
-                          height="40"
-                          patternUnits="userSpaceOnUse"
-                        >
-                          <path
-                            d="M 50 0 L 0 0 0 40"
-                            fill="none"
-                            stroke="#f0f0f0"
-                            strokeWidth="1"
-                          />
-                        </pattern>
-                      </defs>
-                      <rect
-                        width="100%"
-                        height="100%"
-                        fill="url(#productGrid)"
-                      />
+                                  if (props && props.dataKey === "profit") {
+                                    displayName = "Profit";
+                                  } else if (
+                                    props &&
+                                    props.dataKey === "sales"
+                                  ) {
+                                    displayName = "Ventes";
+                                  }
 
-                      {/* Interactive Horizontal bars */}
-                      {topProductsData.map((product, i) => {
-                        const maxSales = Math.max(
-                          ...topProductsData.map((p) => p.sales)
-                        );
-                        const barWidth =
-                          maxSales > 0 ? (product.sales / maxSales) * 300 : 0;
-                        const y = 30 + i * 35;
-                        return (
-                          <g key={i}>
-                            <rect
-                              x="150"
-                              y={y}
-                              width={barWidth}
-                              height="25"
-                              fill="#3b82f6"
-                              rx="4"
-                              className="cursor-pointer hover:opacity-80 transition-opacity"
-                              onMouseEnter={(e) =>
-                                showTooltip(
-                                  e,
-                                  `<strong>${
-                                    product.name
-                                  }</strong><br/>Ventes: ${
-                                    product.sales
-                                  } unités<br/>Revenus: €${product.revenue.toLocaleString()}`
-                                )
-                              }
-                              onMouseLeave={hideTooltip}
-                            />
-                            <text
-                              x="145"
-                              y={y + 17}
-                              textAnchor="end"
-                              fontSize="11"
-                              fill="#666"
-                            >
-                              {product.name.length > 15
-                                ? product.name.substring(0, 15) + "..."
-                                : product.name}
-                            </text>
-                            <text
-                              x={155 + barWidth}
-                              y={y + 17}
-                              fontSize="10"
-                              fill="white"
-                              fontWeight="bold"
-                            >
-                              {product.sales}
-                            </text>
-                          </g>
-                        );
-                      })}
-                    </svg>
-                  </div>
-                </CardContent>
-              </Card>
+                                  return [
+                                    `${formatCurrency(Number(value), monnaie)}`,
+                                    displayName,
+                                  ];
+                                }}
+                                labelFormatter={(label: string) =>
+                                  `Période: ${label}`
+                                }
+                                contentStyle={{
+                                  backgroundColor: "white",
+                                  border: "1px solid #e5e7eb",
+                                  borderRadius: "8px",
+                                  boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
+                                }}
+                              />
+                              <Area
+                                type="monotone"
+                                dataKey="sales"
+                                stroke="#8884d8"
+                                fillOpacity={1}
+                                fill="url(#colorSales)"
+                                name="Ventes"
+                                strokeWidth={2}
+                              />
+                              <Area
+                                type="monotone"
+                                dataKey="profit"
+                                stroke="#ffc658"
+                                fillOpacity={1}
+                                fill="url(#colorProfit)"
+                                name="Profit"
+                                strokeWidth={2}
+                              />
+                              <Legend
+                                verticalAlign="top"
+                                height={36}
+                                formatter={(value: string) => (
+                                  <span className="text-sm text-gray-600">
+                                    {value}
+                                  </span>
+                                )}
+                              />
+                            </AreaChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </CardContent>
+                    </Card>
 
-              {/* Analyse des stocks */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Analyse des stocks</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-6" onMouseMove={updateTooltip}>
-                    {/* Section d'analyse des stocks */}
-                    <div className="text-center p-4 bg-blue-50 rounded-lg dark:bg-gray-900">
-                      <p className="text-sm text-blue-600 dark:text-blue-100">
-                        Données de stock chargées depuis l'API
-                      </p>
-                      <p className="text-xs text-blue-500 mt-1 dark:text-blue-100">
-                        Taux de rupture: {kpis.stockout}%
-                      </p>
-                    </div>
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Répartition par catégorie</CardTitle>
+                      </CardHeader>
+                      <CardContent className="h-72 flex flex-col">
+                        {categoryData.length === 0 ? (
+                          <div className="flex-1 flex flex-col items-center justify-center text-center">
+                            <div className="w-32 h-32 rounded-full bg-gray-100 flex items-center justify-center mb-4">
+                              <Package className="h-12 w-12 text-gray-400" />
+                            </div>
+                            <p className="text-gray-500 font-medium">
+                              Aucune donnée
+                            </p>
+                            <p className="text-sm text-gray-400 mt-1">
+                              Aucune vente catégorisée
+                            </p>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="flex-1 flex items-center justify-center">
+                              <PieChart width={250} height={200}>
+                                <Pie
+                                  data={categoryData}
+                                  cx="50%"
+                                  cy="50%"
+                                  innerRadius={50}
+                                  outerRadius={80}
+                                  paddingAngle={1}
+                                  dataKey="value"
+                                  nameKey="name"
+                                >
+                                  {categoryData.map((entry, index) => (
+                                    <Cell
+                                      key={`cell-${index}`}
+                                      fill={entry.color}
+                                      stroke="#fff"
+                                      strokeWidth={1}
+                                      className="hover:opacity-90 transition-opacity cursor-pointer"
+                                    />
+                                  ))}
+                                </Pie>
+                                <RechartsTooltip
+                                  formatter={(
+                                    value: number,
+                                    name: string,
+                                    props: any
+                                  ) => [`${value}%`, props.payload.name]}
+                                  contentStyle={{
+                                    backgroundColor: "white",
+                                    border: "1px solid #e5e7eb",
+                                    borderRadius: "8px",
+                                  }}
+                                />
+                              </PieChart>
+                            </div>
+                            <div className="mt-4 space-y-3">
+                              {categoryData
+                                .slice(0, 4)
+                                .map((category, index) => (
+                                  <div
+                                    key={index}
+                                    className="flex items-center justify-between"
+                                  >
+                                    <div className="flex items-center space-x-2">
+                                      <div
+                                        className="w-3 h-3 rounded-full"
+                                        style={{
+                                          backgroundColor: category.color,
+                                        }}
+                                      />
+                                      <span className="text-sm text-gray-700 truncate max-w-[100px]">
+                                        {category.name}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center space-x-3">
+                                      <span className="text-sm font-semibold">
+                                        {category.value}%
+                                      </span>
+                                      <span className="text-xs text-gray-500">
+                                        {formatCurrency(
+                                          category.sales,
+                                          monnaie
+                                        )}
+                                      </span>
+                                    </div>
+                                  </div>
+                                ))}
+                            </div>
+                          </>
+                        )}
+                      </CardContent>
+                    </Card>
                   </div>
-                </CardContent>
-              </Card>
-            </div>
+
+                  {/* Deuxième rangée : Commandes et Top Produits */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <Card>
+                      <CardHeader>
+                        <div className="flex items-center justify-between">
+                          <CardTitle>Commandes par période</CardTitle>
+                          <div className="flex items-center space-x-2">
+                            <div className="flex items-center">
+                              <div className="w-3 h-3 rounded-full bg-[#10b981] mr-1"></div>
+                              <span className="text-xs text-gray-600">
+                                Commandes
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="h-64">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart
+                              data={salesData}
+                              margin={{
+                                top: 20,
+                                right: 20,
+                                left: 0,
+                                bottom: 5,
+                              }}
+                              barSize={20}
+                              barCategoryGap="40%"
+                            >
+                              <CartesianGrid
+                                strokeDasharray="3 3"
+                                stroke="#f0f0f0"
+                                vertical={false}
+                              />
+                              <XAxis
+                                dataKey="month"
+                                axisLine={false}
+                                tickLine={false}
+                                tick={{ fontSize: 11 }}
+                                padding={{ left: 10, right: 10 }}
+                                interval={0}
+                              />
+                              <YAxis
+                                axisLine={false}
+                                tickLine={false}
+                                tick={{ fontSize: 11 }}
+                              />
+                              <RechartsTooltip content={<CustomBarTooltip />} />
+                              <Bar
+                                dataKey="orders"
+                                fill="#10b981"
+                                radius={[2, 2, 0, 0]}
+                                name="Commandes"
+                                className="cursor-pointer hover:opacity-90 transition-opacity"
+                              />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Top 5 produits</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="h-64">
+                          <ResponsiveContainer>
+                            <BarChart
+                              width={600}
+                              height={250}
+                              data={topProductsData}
+                              layout="vertical"
+                              margin={{
+                                top: 20,
+                                right: 30,
+                                left: 100,
+                                bottom: 5,
+                              }}
+                            >
+                              <CartesianGrid
+                                strokeDasharray="3 3"
+                                stroke="#f0f0f0"
+                                horizontal={true}
+                                vertical={false}
+                              />
+                              <XAxis
+                                type="number"
+                                axisLine={false}
+                                tickLine={false}
+                                tick={{ fontSize: 11 }}
+                              />
+                              <YAxis
+                                type="category"
+                                dataKey="name"
+                                axisLine={false}
+                                tickLine={false}
+                                tick={{ fontSize: 11 }}
+                                width={90}
+                                tickFormatter={(value: string) => {
+                                  if (value.length > 15) {
+                                    return value.substring(0, 15) + "...";
+                                  }
+                                  return value;
+                                }}
+                              />
+                              <RechartsTooltip
+                                content={<CustomProductTooltip />}
+                              />
+                              <Bar
+                                dataKey="sales"
+                                fill="#3b82f6"
+                                radius={[0, 2, 2, 0]}
+                                name="Unités vendues"
+                                barSize={20}
+                                className="cursor-pointer hover:opacity-90 transition-opacity"
+                              />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {/* Troisième rangée : Analyse des stocks */}
+                  <Card>
+                    <CardHeader>
+                      <div className="flex items-center justify-between">
+                        <CardTitle>Analyse des stocks</CardTitle>
+                        <div className="text-sm text-gray-500">
+                          Entrepôt:{" "}
+                          <span className="font-medium">
+                            {selectedWarehouse === "all"
+                              ? "Tous les entrepôts"
+                              : warehouses.find(
+                                  (w) => w.value === selectedWarehouse
+                                )?.label || selectedWarehouse}
+                          </span>
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      {/* Loading state */}
+                      {stockLoading ? (
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                          <div className="space-y-4">
+                            <div className="p-4 bg-gray-50 rounded-lg border border-gray-200 animate-pulse">
+                              <div className="h-6 bg-gray-200 rounded w-3/4 mb-3"></div>
+                              <div className="h-4 bg-gray-200 rounded w-1/2 mb-2"></div>
+                              <div className="h-8 bg-gray-200 rounded w-1/4 mb-3"></div>
+                              <div className="space-y-2">
+                                <div className="h-3 bg-gray-200 rounded"></div>
+                                <div className="h-3 bg-gray-200 rounded"></div>
+                                <div className="h-3 bg-gray-200 rounded"></div>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="lg:col-span-2">
+                            <div className="h-64 bg-gray-100 rounded-lg animate-pulse"></div>
+                          </div>
+                        </div>
+                      ) : stockError ? (
+                        <div className="text-center py-8">
+                          <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-3" />
+                          <p className="text-red-600 font-medium mb-2">
+                            Erreur de chargement des données
+                          </p>
+                          <p className="text-sm text-gray-500 mb-4">
+                            {stockError}
+                          </p>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => fetchStockData()}
+                            className="gap-2"
+                          >
+                            <RefreshCw className="h-4 w-4" />
+                            Réessayer
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                          {/* Section des indicateurs */}
+                          <div className="space-y-4">
+                            {/* Performance Stock */}
+                            <div className="p-4 bg-blue-50 rounded-lg border border-blue-100">
+                              <div className="flex items-center justify-between mb-3">
+                                <h3 className="font-semibold text-blue-800">
+                                  Performance Stock
+                                </h3>
+                                <Package className="h-5 w-5 text-blue-600" />
+                              </div>
+
+                              {/* Taux de rotation */}
+                              <div className="mb-4">
+                                <div className="flex items-end justify-between">
+                                  <div>
+                                    <p className="text-sm text-blue-700 mb-1">
+                                      Rotation moyenne
+                                    </p>
+                                    <p className="text-2xl font-bold text-blue-800">
+                                      {stockData?.turnoverDays || 0} jours
+                                    </p>
+                                  </div>
+                                  <div
+                                    className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                      (stockData?.turnoverDays || 0) > 120
+                                        ? "bg-red-100 text-red-800"
+                                        : (stockData?.turnoverDays || 0) > 90
+                                        ? "bg-yellow-100 text-yellow-800"
+                                        : "bg-green-100 text-green-800"
+                                    }`}
+                                  >
+                                    {(stockData?.turnoverDays || 0) > 120
+                                      ? "Lent"
+                                      : (stockData?.turnoverDays || 0) > 90
+                                      ? "Moyen"
+                                      : "Rapide"}
+                                  </div>
+                                </div>
+                                <div className="mt-2 text-xs text-blue-600">
+                                  {stockData?.metrics?.soldLast30Days || 0}{" "}
+                                  ventes sur 30 jours (
+                                  {stockData?.metrics?.dailySales?.toFixed(1) ||
+                                    0}
+                                  /jour)
+                                </div>
+                              </div>
+
+                              {/* Autres indicateurs */}
+                              <div className="space-y-3 pt-3 border-t border-blue-200">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-sm text-blue-700">
+                                    Stock total
+                                  </span>
+                                  <span className="font-semibold text-blue-800">
+                                    {stockData?.metrics?.grandTotalStock?.toLocaleString() ||
+                                      "0"}{" "}
+                                    unités
+                                  </span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <span className="text-sm text-blue-700">
+                                    Prix moyen
+                                  </span>
+                                  <span className="font-semibold text-blue-800">
+                                    {stockData?.categories?.[0]?.avgPrice
+                                      ? `${formatCurrency(
+                                          stockData.categories[0].avgPrice,
+                                          monnaie
+                                        )}`
+                                      : "N/A"}
+                                  </span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <span className="text-sm text-blue-700">
+                                    Produits actifs
+                                  </span>
+                                  <span className="font-semibold text-blue-800">
+                                    {stockData?.totalProducts || "0"} modèles
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Ventes récentes */}
+                            <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                              <h4 className="font-medium text-gray-700 mb-3">
+                                Ventes récentes
+                              </h4>
+                              <div className="space-y-2">
+                                <div className="flex items-center justify-between p-2 bg-green-50 rounded">
+                                  <span className="text-sm text-green-700">
+                                    30 derniers jours
+                                  </span>
+                                  <span className="font-semibold text-green-800">
+                                    {stockData?.metrics?.soldLast30Days || 0}{" "}
+                                    unités
+                                  </span>
+                                </div>
+                                <div className="flex items-center justify-between p-2 bg-blue-50 rounded">
+                                  <span className="text-sm text-blue-700">
+                                    Taux journalier
+                                  </span>
+                                  <span className="font-semibold text-blue-800">
+                                    {stockData?.metrics?.dailySales?.toFixed(
+                                      2
+                                    ) || "0"}{" "}
+                                    unités/jour
+                                  </span>
+                                </div>
+                                <div className="text-xs text-gray-500 mt-2">
+                                  Rotation optimale:{" "}
+                                  {stockData?.turnoverDays || 0} jours
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Santé du stock */}
+                            <div className="p-4 bg-white rounded-lg border border-gray-200">
+                              <h4 className="font-medium text-gray-700 mb-3">
+                                Santé du stock
+                              </h4>
+                              <div className="space-y-3">
+                                {/* Taux de rupture */}
+                                <div>
+                                  <div className="flex items-center justify-between mb-1">
+                                    <span className="text-sm text-gray-600">
+                                      Taux de rupture
+                                    </span>
+                                    <span
+                                      className={`text-sm font-medium ${
+                                        (stockData?.stockoutRate || 0) > 10
+                                          ? "text-red-600"
+                                          : (stockData?.stockoutRate || 0) > 5
+                                          ? "text-yellow-600"
+                                          : "text-green-600"
+                                      }`}
+                                    >
+                                      {stockData?.stockoutRate?.toFixed(1) || 0}
+                                      %
+                                    </span>
+                                  </div>
+                                  <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                                    <div
+                                      className={`h-full rounded-full transition-all duration-500 ${
+                                        (stockData?.stockoutRate || 0) > 10
+                                          ? "bg-red-500"
+                                          : (stockData?.stockoutRate || 0) > 5
+                                          ? "bg-yellow-500"
+                                          : "bg-green-500"
+                                      }`}
+                                      style={{
+                                        width: `${Math.min(
+                                          stockData?.stockoutRate || 0,
+                                          100
+                                        )}%`,
+                                      }}
+                                    />
+                                  </div>
+                                </div>
+
+                                {/* Alertes */}
+                                <div className="space-y-2">
+                                  <div className="flex items-center justify-between p-2 bg-red-50 rounded">
+                                    <span className="text-sm text-red-700">
+                                      Stock critique
+                                    </span>
+                                    <span className="inline-flex items-center rounded-full bg-red-100 px-2 py-1 text-xs font-medium text-red-800 h-5">
+                                      {stockData?.criticalAlerts || 0}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center justify-between p-2 bg-yellow-50 rounded">
+                                    <span className="text-sm text-yellow-700">
+                                      À réapprovisionner
+                                    </span>
+                                    <span className="inline-flex items-center rounded-full border border-yellow-200 bg-yellow-100 px-2 py-1 text-xs font-medium text-yellow-800 h-5">
+                                      {stockData?.reorderAlerts || 0}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Section du graphique */}
+                          <div className="lg:col-span-2">
+                            {stockData?.categories?.length > 0 ? (
+                              <>
+                                <div className="h-64">
+                                  <ResponsiveContainer
+                                    width="100%"
+                                    height="100%"
+                                  >
+                                    <BarChart
+                                      data={stockData.categories.map((cat) => ({
+                                        category: cat.name,
+                                        stock: cat.currentStock,
+                                        seuil: cat.minimumThreshold,
+                                        color: cat.color || "#8b5cf6",
+                                      }))}
+                                      margin={{
+                                        top: 20,
+                                        right: 30,
+                                        left: 20,
+                                        bottom: 20,
+                                      }}
+                                    >
+                                      <CartesianGrid
+                                        strokeDasharray="3 3"
+                                        stroke="#f0f0f0"
+                                        vertical={false}
+                                      />
+                                      <XAxis
+                                        dataKey="category"
+                                        axisLine={false}
+                                        tickLine={false}
+                                        tick={{ fontSize: 12 }}
+                                        interval={0}
+                                      />
+                                      <YAxis
+                                        axisLine={false}
+                                        tickLine={false}
+                                        tick={{ fontSize: 12 }}
+                                      />
+                                      <Tooltip
+                                        formatter={(value, name) => {
+                                          const label =
+                                            name === "stock"
+                                              ? "Stock actuel"
+                                              : "Seuil minimum";
+                                          return [`${value} unités`, label];
+                                        }}
+                                        labelFormatter={(label) =>
+                                          `Catégorie: ${label}`
+                                        }
+                                        contentStyle={{
+                                          backgroundColor: "white",
+                                          border: "1px solid #e5e7eb",
+                                          borderRadius: "8px",
+                                          boxShadow:
+                                            "0 4px 6px -1px rgb(0 0 0 / 0.1)",
+                                        }}
+                                      />
+                                      <Legend
+                                        verticalAlign="top"
+                                        height={36}
+                                        formatter={(value) => (
+                                          <span className="text-sm text-gray-600">
+                                            {value === "stock"
+                                              ? "Stock actuel"
+                                              : "Seuil minimum"}
+                                          </span>
+                                        )}
+                                      />
+                                      <Bar
+                                        dataKey="seuil"
+                                        fill="#fbbf24"
+                                        name="Seuil"
+                                        radius={[4, 4, 0, 0]}
+                                        opacity={0.8}
+                                      />
+                                      <Bar
+                                        dataKey="stock"
+                                        fill="#8b5cf6"
+                                        name="Stock"
+                                        radius={[4, 4, 0, 0]}
+                                      />
+                                    </BarChart>
+                                  </ResponsiveContainer>
+                                </div>
+
+                                {/* Résumé sous le graphique */}
+                                <div className="mt-6 pt-4 border-t border-gray-200">
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                      <h4 className="font-medium text-gray-700 mb-2">
+                                        Résumé par catégorie
+                                      </h4>
+                                      <div className="space-y-2">
+                                        {stockData.categories.map((cat) => (
+                                          <div
+                                            key={cat.name}
+                                            className="flex items-center justify-between"
+                                          >
+                                            <div className="flex items-center gap-2">
+                                              <div
+                                                className="w-3 h-3 rounded-full"
+                                                style={{
+                                                  backgroundColor: cat.color,
+                                                }}
+                                              />
+                                              <span className="text-sm text-gray-600">
+                                                {cat.name}
+                                              </span>
+                                            </div>
+                                            <div className="flex items-center gap-4">
+                                              <span className="text-sm font-medium">
+                                                {cat.currentStock} unités
+                                              </span>
+                                              <span
+                                                className={`text-xs px-2 py-1 rounded ${
+                                                  cat.currentStock <
+                                                  cat.minimumThreshold
+                                                    ? "bg-red-100 text-red-800"
+                                                    : "bg-green-100 text-green-800"
+                                                }`}
+                                              >
+                                                Seuil: {cat.minimumThreshold}
+                                              </span>
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+
+                                    <div className="space-y-4">
+                                      <div>
+                                        <p className="text-sm text-gray-600 mb-1">
+                                          <span className="font-medium">
+                                            {
+                                              stockData.categories.filter(
+                                                (cat) =>
+                                                  cat.currentStock <
+                                                  cat.minimumThreshold
+                                              ).length
+                                            }{" "}
+                                            catégorie(s)
+                                          </span>{" "}
+                                          sous le seuil
+                                        </p>
+                                        <p className="text-xs text-gray-500">
+                                          Dernière mise à jour:{" "}
+                                          {stockData.lastUpdate || "N/A"}
+                                        </p>
+                                      </div>
+
+                                      <div className="flex items-center justify-between pt-2 border-t">
+                                        <div>
+                                          <p className="text-sm font-medium text-gray-700">
+                                            Recommandations
+                                          </p>
+                                          <p className="text-xs text-gray-500">
+                                            {stockData.turnoverDays > 90
+                                              ? "Considérer des promotions pour accélérer la rotation"
+                                              : stockData.turnoverDays < 60
+                                              ? "Vérifier l'approvisionnement pour éviter les ruptures"
+                                              : "Rotation optimale - maintenir le niveau de stock"}
+                                          </p>
+                                        </div>
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          className="gap-2"
+                                        >
+                                          <Eye className="h-4 w-4" />
+                                          Détails
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </>
+                            ) : (
+                              <div className="h-64 bg-gray-50 rounded-lg border border-gray-200 flex flex-col items-center justify-center">
+                                <BarChartIcon className="h-12 w-12 text-gray-400 mb-3" />
+                                <p className="text-gray-500 font-medium">
+                                  Données de stock en cours d'analyse
+                                </p>
+                                <p className="text-sm text-gray-400 mt-1 text-center max-w-md">
+                                  Les données détaillées par catégorie seront
+                                  disponibles une fois que vous aurez diversifié
+                                  votre gamme de produits
+                                </p>
+                                <div className="mt-4 flex gap-3">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => fetchStockData()}
+                                    className="gap-2"
+                                  >
+                                    <RefreshCw className="h-4 w-4" />
+                                    Actualiser
+                                  </Button>
+                                  <Button
+                                    variant="default"
+                                    size="sm"
+                                    className="gap-2"
+                                    asChild
+                                  >
+                                    <a href="/products">
+                                      <Plus className="h-4 w-4" />
+                                      Ajouter produits
+                                    </a>
+                                  </Button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+              </>
+            )}
           </main>
         </div>
 
-        {/* Tooltip global qui suit la souris */}
         <GlobalTooltip {...tooltip} />
       </div>
     </RoleGuard>

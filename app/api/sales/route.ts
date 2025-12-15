@@ -215,7 +215,6 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
 
-
     const {
       orderNumber: providedOrderNumber,
       date,
@@ -226,7 +225,8 @@ export async function POST(request: NextRequest) {
       tax_rate = 18.00, // Taux de TVA par défaut (18%) 
       items,
       warehouseId: warehouseValue, // Renommer pour clarifier que c'est la valeur ('main')
-      products = []
+      products = [],
+      clientId
     } = body;
 
     const status = body.paymentMethod == "cash" ? "completed" : 'pending';
@@ -505,8 +505,9 @@ export async function POST(request: NextRequest) {
         tax_rate,  -- Champs TVA
         created_at, 
         updated_at,
-        user_id
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW(), NOW(), $14)
+        user_id,
+        client_id
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW(), NOW(), $14, $15)
       RETURNING id`,
       [
         orderNumber,
@@ -522,7 +523,8 @@ export async function POST(request: NextRequest) {
         totalHT,         // amount_ht = HT
         totalTax,        // amount_tax = montant de la taxe
         tax_rate,        // tax_rate (20.00 par défaut)
-        user_id
+        user_id,
+        clientId
       ]
     );
 

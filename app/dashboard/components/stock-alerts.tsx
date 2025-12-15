@@ -36,7 +36,7 @@ export function StockAlerts({
   titre?: string;
 }) {
   return (
-    <Card className="bg-white dark:bg-gray-900 dark:text-gray-300">
+    <Card className="bg-white dark:bg-gray-900 dark:text-gray-300 overflow-auto">
       <CardHeader>
         <CardTitle className="text-lg font-semibold flex items-center">
           <AlertTriangle className="h-5 w-5 text-orange-500 mr-2" />
@@ -57,7 +57,7 @@ export function StockAlerts({
             return (
               <div
                 key={index}
-                className="flex items-center justify-between p-4 border-l-4 border-orange-500 bg-orange-50 rounded-r-lg"
+                className="flex items-center justify-between p-4 border-l-4 border-orange-500 bg-orange-50 rounded-r-lg overflow-auto"
               >
                 <div className="flex items-center space-x-3">
                   <div className="p-2 bg-orange-100 rounded-lg">

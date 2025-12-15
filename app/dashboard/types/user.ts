@@ -8,6 +8,7 @@ export interface AppUser {
   warehouse: string;
   status: "active" | "inactive";
   lastlogin: string | null;
+  warehouse_id: number | null
 }
 
 export type NewUser = {
@@ -19,6 +20,7 @@ export type NewUser = {
   warehouse: string;
   status: boolean;
   lastlogin: string | null;
+  warehouse_id: number | null
 };
 
 
@@ -32,4 +34,5 @@ export type Client = {
   type: "Entreprise" | "Particulier"; // contrainte de type
   created_at: string;        // timestamp ISO (PostgreSQL -> string en JSON)
   updated_at: string;        // idem
+  warehouse_id: number | null
 };

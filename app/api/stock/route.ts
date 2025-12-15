@@ -55,6 +55,21 @@ async function getRoleFromSession(): Promise<string | null> {
     return null;
   }
 }
+async function getWarehouseIdFromSession(): Promise<number | null> {
+  try {
+    const session = await getServerSession(authOptions);
+
+    if (!session || !session.user || !session.user.id) {
+      console.error("❌ Session utilisateur ou id manquant");
+      return null;
+    }
+
+    return Number(session.user.id);
+  } catch (error) {
+    console.error("❌ Erreur lors de la récupération de la session:", error);
+    return null;
+  }
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -64,6 +79,9 @@ export async function GET(request: NextRequest) {
     const user_id = await getUserIdFromSession();
     // Récupérer le company_id depuis la session
     const user_role = await getRoleFromSession();
+    // Récupérer le warehouse_id depuis la session
+    const warehouse_id = await getWarehouseIdFromSession();
+
 
 
     if (!companyId) {
@@ -279,18 +297,18 @@ export async function GET(request: NextRequest) {
         COUNT(CASE WHEN sm.from_warehouse_id IS NOT NULL AND sm.to_warehouse_id IS NOT NULL THEN 1 END) as total_transfers,
         COUNT(CASE WHEN sm.type = 'adjustment' THEN 1 END) as total_adjustments
       FROM stock_movements sm
-      INNER JOIN products p ON sm.product_id = p.id AND p.company_id = $1
-      WHERE sm.created_at >= NOW() - INTERVAL '${days} days' AND sm.user_id = $2
+      INNER JOIN product_warehouses p ON sm.product_id = p.product_id AND p.company_id = $1 AND p.warehouse_id = $2
+      WHERE sm.created_at >= NOW() - INTERVAL '${days} days' AND sm.user_id = $3
     `;
 
     let statsResult;
     let stats;
     if (user_role === 'admin') {
 
-      statsResult = await pool.query(statsUserQuery, [companyId, user_id]);
+      statsResult = await pool.query(statsQuery, [companyId]);
       stats = statsResult.rows[0];
     } else {
-      statsResult = await pool.query(statsQuery, [companyId]);
+      statsResult = await pool.query(statsUserQuery, [companyId, warehouse_id, user_id]);
       stats = statsResult.rows[0];
     }
 

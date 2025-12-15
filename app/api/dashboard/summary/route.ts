@@ -16,11 +16,14 @@ export async function GET(request: Request) {
     const userId = session.user.id;
     const userRole = session.user.role;
     const userCompanyId = session.user.company_id;
+    const userWarehouseId = session.user.warehouse_id;
 
     console.log("📊 Dashboard API - User:", {
       id: userId,
       role: userRole,
       company_id: userCompanyId,
+      Warehouse_id: userWarehouseId
+
     });
 
     const url = new URL(request.url);
@@ -30,12 +33,23 @@ export async function GET(request: Request) {
     const statsPromises: Promise<any>[] = [];
 
     // 1) Total produits
-    statsPromises.push(
-      pool.query(
-        "SELECT COUNT(*) AS count FROM products WHERE company_id = $1",
-        [userCompanyId]
-      )
-    );
+    if (userRole === "admin") {
+
+      statsPromises.push(
+        pool.query(
+          "SELECT COUNT(*) AS count FROM products WHERE company_id = $1",
+          [userCompanyId]
+        )
+      );
+    } else {
+      statsPromises.push(
+        pool.query(
+          "SELECT COUNT(*) AS count FROM product_warehouses WHERE warehouse_id = $1 AND company_id = $2",
+          [userWarehouseId, userCompanyId]
+        )
+      );
+
+    }
 
     // 2) Total ventes (admin = tout, sinon par user)
     if (userRole === "admin") {
@@ -55,17 +69,28 @@ export async function GET(request: Request) {
     }
 
     // 3) Total clients
-    statsPromises.push(
-      pool.query(
-        "SELECT COUNT(*) AS count FROM clients WHERE company_id = $1",
-        [userCompanyId]
-      )
-    );
+    if (userRole === "admin") {
+
+      statsPromises.push(
+        pool.query(
+          "SELECT COUNT(*) AS count FROM clients WHERE company_id = $1",
+          [userCompanyId]
+        )
+      );
+    } else {
+      statsPromises.push(
+        pool.query(
+          "SELECT COUNT(*) AS count FROM clients WHERE company_id = $1",
+          [userCompanyId]
+        )
+      );
+    }
 
     // 4) Nombre de produits en rupture (compteur global)
-    statsPromises.push(
-      pool.query(
-        `
+    if (userRole === "admin") {
+      statsPromises.push(
+        pool.query(
+          `
         SELECT COUNT(*) AS count
         FROM products p
         WHERE p.company_id = $1
@@ -76,9 +101,24 @@ export async function GET(request: Request) {
               AND pw.stock <= 10
           )
       `,
-        [userCompanyId]
-      )
-    );
+          [userCompanyId]
+        )
+      );
+    } else {
+
+      statsPromises.push(
+        pool.query(
+          `
+        SELECT COUNT(*) 
+        FROM product_warehouses 
+        WHERE warehouse_id = $1 AND company_id = $2 AND stock <= 10
+      `,
+          [userWarehouseId, userCompanyId]
+        )
+      );
+    }
+
+
 
     // 5) Chiffre d'affaires total
     if (userRole === "admin") {
@@ -113,6 +153,7 @@ export async function GET(request: Request) {
       totalRevenue: Number(revenueResult.rows[0]?.revenue) || 0,
       userRole,
       userCompanyId,
+      userWarehouseId
     };
 
     console.log("✅ Statistiques calculées:", stats);
@@ -242,7 +283,8 @@ export async function GET(request: Request) {
       }
 
       // --- Alertes de stock détaillées (format pour ta carte) ---
-      const lowStockResult = await pool.query(
+      let lowStockResult = null
+      lowStockResult = await pool.query(
         `
         SELECT
           p.id,
@@ -256,7 +298,28 @@ export async function GET(request: Request) {
         ORDER BY pw.stock ASC, p.name ASC
       `,
         [userCompanyId]
-      );
+      )
+      if (userRole === "admin") {
+
+      } else {
+        lowStockResult = await pool.query(
+          `
+       SELECT
+          p.id,
+          p.name,
+          p.category,
+          pw.stock
+        FROM product_warehouses pw
+        JOIN products p ON p.id = pw.product_id
+        WHERE pw.company_id = $1
+		  AND pw.warehouse_id = $2
+          AND pw.stock <= 10      -- seuil d'alerte (0 = rupture, 1-5 = bas stock)
+        ORDER BY pw.stock ASC, p.name ASC
+      `,
+          [userCompanyId, userWarehouseId]
+        );
+      }
+
 
       stockAlerts = lowStockResult.rows.map((row) => ({
         id: row.id,

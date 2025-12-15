@@ -15,4 +15,8 @@ export type Sale = {
   paymentStatus: string;
   items: number;
   products: Product[];
+  tax_rate: number;
+  amount_ht: number;
+  amount_tax: number;
+  clientId: number;
 };

@@ -41,6 +41,8 @@ import {
 import { toast } from "sonner";
 import { Textarea } from "@/app/dashboard/components/ui/textarea";
 import { RoleGuard } from "../components/auth/role-guard";
+import { useDetermineSympole } from "@/lib/useDetermineSympole";
+import { formatCurrency } from "@/lib/formatCurency";
 
 type Product = {
   id: number;
@@ -48,6 +50,7 @@ type Product = {
   name: string;
   reference: string;
   category: string;
+  category_id: number;
   stock: number;
   price: number;
   cost_price: number | null;
@@ -106,6 +109,8 @@ export default function ProductsPage() {
     Array<{ id: number; name: string }>
   >([]);
 
+  const [monnaie, setMonnaie] = useState("XOF");
+
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(5);
 
@@ -118,6 +123,7 @@ export default function ProductsPage() {
     name: "",
     reference: "",
     category: "",
+    category_id: 0,
     stock: "0",
     price: "0.00",
     cost_price: "0.00", // 🔥 AJOUT
@@ -126,21 +132,9 @@ export default function ProductsPage() {
     warehouse_id: "none",
   });
 
-  // const categories = [
-  //   "Smartphones",
-  //   "Ordinateurs",
-  //   "Tablettes",
-  //   "Accessoires",
-  //   "Audio",
-  // ];
-  // const suppliers = [
-  //   "Apple Inc.",
-  //   "Samsung",
-  //   "Dell Technologies",
-  //   "HP",
-  //   "Lenovo",
-  // ];
-  // Catégorie
+  // Récupération de la monnaie
+  useDetermineSympole(setMonnaie);
+  console.log("La monnais de entreprise est : ", monnaie);
 
   useEffect(() => {
     const fetchCategories = async () => {
@@ -293,6 +287,7 @@ export default function ProductsPage() {
       name: "",
       reference: "",
       category: "",
+      category_id: 0,
       stock: "0",
       price: "0.00",
       cost_price: "", // 🔥 AJOUT
@@ -357,6 +352,7 @@ export default function ProductsPage() {
         cost_price: costPrice, // 🔥 AJOUT DU COST_PRICE
         supplier: formData.supplier === "aucun" ? null : formData.supplier,
         description: formData.description || null,
+        category_id: Number(formData.category_id),
         status:
           stockValue === 0
             ? "out_of_stock"
@@ -366,11 +362,6 @@ export default function ProductsPage() {
         warehouse_id:
           formData.warehouse_id === "none" ? null : formData.warehouse_id,
       };
-
-      console.log("📦 Payload ajout:", payload);
-      console.log(
-        `💰 Prix: ${price}€, Coût: ${costPrice}€, Marge: ${price - costPrice}€`
-      );
 
       const res = await fetch("/api/products", {
         method: "POST",
@@ -387,7 +378,12 @@ export default function ProductsPage() {
       setProducts((prev) => [...prev, saved]);
       setIsAddModalOpen(false);
       resetForm();
-      toast.success(`Produit ajouté avec succès! Marge: ${price - costPrice}€`);
+      toast.success(
+        `Produit ajouté avec succès! Marge: ${formatCurrency(
+          price - costPrice,
+          monnaie
+        )}`
+      );
     } catch (err) {
       console.error("handleAdd error:", err);
       toast.error("Impossible d'ajouter le produit");
@@ -422,6 +418,7 @@ export default function ProductsPage() {
         price: Number.parseFloat(formData.price || "0"),
         supplier: formData.supplier === "aucun" ? null : formData.supplier,
         description: formData.description || null,
+        category_id: Number(formData.category_id),
         status:
           stockValue === 0
             ? "out_of_stock"
@@ -470,6 +467,7 @@ export default function ProductsPage() {
       name: product.name,
       reference: product.reference,
       category: product.category || "",
+      category_id: product.category_id,
       stock: String(product.stock ?? 0),
       price: String(product.price ?? 0),
       cost_price: String(product.cost_price ?? 0), // 🔥 AJOUT
@@ -572,6 +570,7 @@ export default function ProductsPage() {
       </div>
     );
   }
+  console.log("la valeur de catégorie est : ", formData.category);
 
   return (
     <RoleGuard allowedRoles={["admin"]}>
@@ -631,18 +630,34 @@ export default function ProductsPage() {
                     </div>
                     <div className="grid gap-2">
                       <Label>Catégorie</Label>
+
                       <Select
-                        value={formData.category}
-                        onValueChange={(v) =>
-                          setFormData({ ...formData, category: v })
+                        value={
+                          formData.category
+                            ? JSON.stringify({
+                                id: formData.category_id,
+                                name: formData.category,
+                              })
+                            : ""
                         }
+                        onValueChange={(v) => {
+                          const parsed = JSON.parse(v);
+                          setFormData((f) => ({
+                            ...f,
+                            category: parsed.name,
+                            category_id: parsed.id,
+                          }));
+                        }}
                       >
                         <SelectTrigger>
-                          <SelectValue placeholder="Sélectionner une catégorie" />
+                          <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
                           {categories.map((c) => (
-                            <SelectItem key={c.id} value={c.name}>
+                            <SelectItem
+                              key={c.id}
+                              value={JSON.stringify({ id: c.id, name: c.name })}
+                            >
                               {c.name}
                             </SelectItem>
                           ))}
@@ -659,7 +674,9 @@ export default function ProductsPage() {
                       <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-2">
                           <Label className="flex items-center gap-1">
-                            <span>Prix de vente (€)</span>
+                            <span>
+                              Prix de vente ({formatCurrency(0, monnaie)})
+                            </span>
                             <span className="text-xs text-gray-500">HT</span>
                           </Label>
                           <Input
@@ -684,7 +701,7 @@ export default function ProductsPage() {
                                 ).toFixed(1);
                                 // Vous pouvez afficher ces infos
                                 console.log(
-                                  `Marge calculée: ${margin}€ (${marginPercent}%)`
+                                  `Marge calculée: ${margin} (${marginPercent}%)`
                                 );
                               }
                             }}
@@ -698,7 +715,9 @@ export default function ProductsPage() {
 
                         <div className="space-y-2">
                           <Label className="flex items-center gap-1">
-                            <span>Prix d'achat (€)</span>
+                            <span>
+                              Prix d'achat ({formatCurrency(0, monnaie)})
+                            </span>
                             <span className="text-xs text-gray-500">Coût</span>
                           </Label>
                           <Input
@@ -752,7 +771,10 @@ export default function ProductsPage() {
                                   formData.cost_price || "0"
                                 );
                                 const margin = sellingPrice - costPrice;
-                                return `${margin.toFixed(2)}€`;
+                                return `${formatCurrency(
+                                  Number(margin.toFixed(2)),
+                                  monnaie
+                                )}`;
                               })()}
                             </div>
                           </div>
@@ -789,7 +811,10 @@ export default function ProductsPage() {
                                   formData.price || "0"
                                 );
                                 const ttc = sellingPrice * 1.18; // TVA 18%
-                                return `${ttc.toFixed(2)}€`;
+                                return `${formatCurrency(
+                                  Number(ttc.toFixed(2)),
+                                  monnaie
+                                )}`;
                               })()}
                             </div>
                           </div>
@@ -1109,7 +1134,9 @@ export default function ProductsPage() {
                         <TableCell>{product.reference}</TableCell>
                         <TableCell>{product.category}</TableCell>
                         <TableCell>{product.stock}</TableCell>
-                        <TableCell>€{product.price}</TableCell>
+                        <TableCell>
+                          {formatCurrency(product.price, monnaie)}
+                        </TableCell>
                         <TableCell>{product.supplier}</TableCell>
                         <TableCell>
                           {getStatusBadge(product.status, product.stock)}
@@ -1254,16 +1281,24 @@ export default function ProductsPage() {
                 <Label>Catégorie</Label>
                 <Select
                   value={formData.category}
-                  onValueChange={(v) =>
-                    setFormData({ ...formData, category: v })
-                  }
+                  onValueChange={(v) => {
+                    const parsed = JSON.parse(v);
+                    setFormData((f) => ({
+                      ...f,
+                      category: parsed.name,
+                      category_id: parsed.id,
+                    }));
+                  }}
                 >
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     {categories.map((c) => (
-                      <SelectItem key={c.id} value={c.name}>
+                      <SelectItem
+                        key={c.id}
+                        value={JSON.stringify({ id: c.id, name: c.name })}
+                      >
                         {c.name}
                       </SelectItem>
                     ))}
@@ -1283,7 +1318,7 @@ export default function ProductsPage() {
                   />
                 </div>
                 <div>
-                  <Label>Prix (€)</Label>
+                  <Label>Prix ({formatCurrency(0, monnaie)})</Label>
                   <Input
                     type="number"
                     step="0.01"

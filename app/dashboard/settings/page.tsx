@@ -41,7 +41,7 @@ import {
 } from "@/app/dashboard/components/ui/tabs";
 import { RoleGuard } from "../components/auth/role-guard";
 import { toast } from "sonner";
-import { number } from "zod";
+import currencies from "@/lib/currencies.json";
 
 // Types correspondant à la structure de la base de données
 interface CompanySettings {
@@ -147,6 +147,13 @@ export default function SettingsPage() {
     newPassword: "",
     confirmPassword: "",
   });
+
+  console.log("Le currency est : ", currencies);
+
+  // Récupérer le rôle de l'utilisateur
+  const userRole = session?.user?.role || "user";
+  console.log("L'utilisateur est : ", userRole);
+
   // Initialisation TVA
   useEffect(() => {
     const fetchTva = async () => {
@@ -573,252 +580,195 @@ export default function SettingsPage() {
 
           {/* Main Content */}
           <main className="flex-1 p-6">
-            <Tabs defaultValue="general" className="space-y-6">
+            <Tabs
+              defaultValue={userRole === "admin" ? "general" : "notifications"}
+              className="space-y-6"
+            >
               <TabsList className="grid w-full  grid-cols-3 lg:grid-cols-6">
-                <TabsTrigger value="general">Général</TabsTrigger>
+                {userRole === "admin" && (
+                  <TabsTrigger value="general">Général</TabsTrigger>
+                )}
                 <TabsTrigger value="notifications">Notifications</TabsTrigger>
                 <TabsTrigger value="security">Sécurité</TabsTrigger>
-                <TabsTrigger value="backup">Sauvegarde</TabsTrigger>
+                {userRole === "admin" && (
+                  <TabsTrigger value="backup">Sauvegarde</TabsTrigger>
+                )}
                 <TabsTrigger value="appearance">Apparence</TabsTrigger>
-                <TabsTrigger value="taxe">Taxe</TabsTrigger>
+                {userRole === "admin" && (
+                  <TabsTrigger value="taxe">Taxe</TabsTrigger>
+                )}
               </TabsList>
 
-              <TabsContent value="general" className="space-y-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center">
-                      <Globe className="h-5 w-5 mr-2" />
-                      Informations de l'entreprise
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {userRole === "admin" && (
+                <TabsContent value="general" className="space-y-6">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center">
+                        <Globe className="h-5 w-5 mr-2" />
+                        Informations de l'entreprise
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="companyName">
+                            Nom de l'entreprise
+                          </Label>
+                          <Input
+                            id="companyName"
+                            value={companySettings.company_name}
+                            onChange={(e) =>
+                              setCompanySettings({
+                                ...companySettings,
+                                company_name: e.target.value,
+                              })
+                            }
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="companyEmail">Email</Label>
+                          <Input
+                            id="companyEmail"
+                            type="email"
+                            value={companySettings.company_email}
+                            onChange={(e) =>
+                              setCompanySettings({
+                                ...companySettings,
+                                company_email: e.target.value,
+                              })
+                            }
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="companyPhone">Téléphone</Label>
+                          <Input
+                            id="companyPhone"
+                            value={companySettings.company_phone}
+                            onChange={(e) =>
+                              setCompanySettings({
+                                ...companySettings,
+                                company_phone: e.target.value,
+                              })
+                            }
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="currency">Devise</Label>
+                          <Select
+                            value={companySettings.currency}
+                            onValueChange={(value) =>
+                              setCompanySettings({
+                                ...companySettings,
+                                currency: value,
+                              })
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent className="max-h-60 overflow-auto">
+                              {currencies.map((currency) => (
+                                <SelectItem
+                                  key={currency.code}
+                                  value={currency.code}
+                                >
+                                  {`${currency.currency} ${currency.country} (${currency.symbol})`}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
                       <div>
-                        <Label htmlFor="companyName">Nom de l'entreprise</Label>
-                        <Input
-                          id="companyName"
-                          value={companySettings.company_name}
+                        <Label htmlFor="companyAddress">Adresse</Label>
+                        <Textarea
+                          id="companyAddress"
+                          value={companySettings.company_address}
                           onChange={(e) =>
                             setCompanySettings({
                               ...companySettings,
-                              company_name: e.target.value,
+                              company_address: e.target.value,
                             })
                           }
+                          rows={3}
                         />
                       </div>
-                      <div>
-                        <Label htmlFor="companyEmail">Email</Label>
-                        <Input
-                          id="companyEmail"
-                          type="email"
-                          value={companySettings.company_email}
-                          onChange={(e) =>
-                            setCompanySettings({
-                              ...companySettings,
-                              company_email: e.target.value,
-                            })
-                          }
-                        />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="companyPhone">Téléphone</Label>
-                        <Input
-                          id="companyPhone"
-                          value={companySettings.company_phone}
-                          onChange={(e) =>
-                            setCompanySettings({
-                              ...companySettings,
-                              company_phone: e.target.value,
-                            })
-                          }
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="currency">Devise</Label>
-                        <Select
-                          value={companySettings.currency}
-                          onValueChange={(value) =>
-                            setCompanySettings({
-                              ...companySettings,
-                              currency: value,
-                            })
-                          }
+                      <div className="pt-2">
+                        <Button
+                          onClick={saveCompanySettings}
+                          disabled={saving}
+                          className="bg-blue-600 hover:bg-blue-700"
                         >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent className="max-h-96">
-                            {/* Afrique de l'Ouest */}
-                            <SelectItem value="XOF">Franc CFA (XOF)</SelectItem>
-                            <SelectItem value="NGN">
-                              Naira Nigérian (₦)
-                            </SelectItem>
-                            <SelectItem value="GHS">
-                              Cedi Ghanéen (₵)
-                            </SelectItem>
-                            <SelectItem value="SLL">
-                              Leone Sierra-Léonais (Le)
-                            </SelectItem>
-                            <SelectItem value="GNF">
-                              Franc Guinéen (FG)
-                            </SelectItem>
-                            <SelectItem value="LRD">
-                              Dollar Libérien ($)
-                            </SelectItem>
-
-                            {/* Afrique Centrale */}
-                            <SelectItem value="XAF">Franc CFA (XAF)</SelectItem>
-                            <SelectItem value="CDF">
-                              Franc Congolais (FC)
-                            </SelectItem>
-
-                            {/* Afrique de l'Est */}
-                            <SelectItem value="KES">
-                              Shilling Kenyan (KSh)
-                            </SelectItem>
-                            <SelectItem value="TZS">
-                              Shilling Tanzanien (TSh)
-                            </SelectItem>
-                            <SelectItem value="UGX">
-                              Shilling Ougandais (USh)
-                            </SelectItem>
-                            <SelectItem value="RWF">
-                              Franc Rwandais (RF)
-                            </SelectItem>
-                            <SelectItem value="ETB">
-                              Birr Éthiopien (Br)
-                            </SelectItem>
-
-                            {/* Afrique Australe */}
-                            <SelectItem value="ZAR">
-                              Rand Sud-Africain (R)
-                            </SelectItem>
-                            <SelectItem value="BWP">
-                              Pula Botswanais (P)
-                            </SelectItem>
-                            <SelectItem value="MZN">
-                              Metical Mozambicain (MT)
-                            </SelectItem>
-                            <SelectItem value="AOA">
-                              Kwanza Angolais (Kz)
-                            </SelectItem>
-                            <SelectItem value="ZMW">
-                              Kwacha Zambien (ZK)
-                            </SelectItem>
-
-                            {/* Afrique du Nord */}
-                            <SelectItem value="MAD">
-                              Dirham Marocain (د.م.)
-                            </SelectItem>
-                            <SelectItem value="DZD">
-                              Dinar Algérien (د.ج)
-                            </SelectItem>
-                            <SelectItem value="TND">
-                              Dinar Tunisien (د.ت)
-                            </SelectItem>
-                            <SelectItem value="EGP">
-                              Livre Égyptienne (E£)
-                            </SelectItem>
-
-                            {/* Monnaies internationales */}
-                            <SelectItem value="EUR">Euro (€)</SelectItem>
-                            <SelectItem value="USD">Dollar US ($)</SelectItem>
-                            <SelectItem value="GBP">
-                              Livre Sterling (£)
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
+                          {saving ? (
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          ) : (
+                            <Save className="h-4 w-4 mr-2" />
+                          )}
+                          Sauvegarder les informations
+                        </Button>
                       </div>
-                    </div>
-                    <div>
-                      <Label htmlFor="companyAddress">Adresse</Label>
-                      <Textarea
-                        id="companyAddress"
-                        value={companySettings.company_address}
-                        onChange={(e) =>
-                          setCompanySettings({
-                            ...companySettings,
-                            company_address: e.target.value,
-                          })
-                        }
-                        rows={3}
-                      />
-                    </div>
-                    <div className="pt-2">
-                      <Button
-                        onClick={saveCompanySettings}
-                        disabled={saving}
-                        className="bg-blue-600 hover:bg-blue-700"
-                      >
-                        {saving ? (
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        ) : (
-                          <Save className="h-4 w-4 mr-2" />
-                        )}
-                        Sauvegarder les informations
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
+                    </CardContent>
+                  </Card>
 
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Localisation</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="language">Langue</Label>
-                        <Select
-                          value={companySettings.language}
-                          onValueChange={(value) =>
-                            setCompanySettings({
-                              ...companySettings,
-                              language: value,
-                            })
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="fr">Français</SelectItem>
-                            <SelectItem value="en">English</SelectItem>
-                            <SelectItem value="es">Español</SelectItem>
-                            <SelectItem value="pt">Português</SelectItem>
-                            <SelectItem value="ar">العربية</SelectItem>
-                          </SelectContent>
-                        </Select>
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Localisation</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="language">Langue</Label>
+                          <Select
+                            value={companySettings.language}
+                            onValueChange={(value) =>
+                              setCompanySettings({
+                                ...companySettings,
+                                language: value,
+                              })
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="fr">Français</SelectItem>
+                              <SelectItem value="en">English</SelectItem>
+                              <SelectItem value="es">Español</SelectItem>
+                              <SelectItem value="pt">Português</SelectItem>
+                              <SelectItem value="ar">العربية</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label htmlFor="timezone">Fuseau horaire</Label>
+                          <Select
+                            value={companySettings.timezone}
+                            onValueChange={(value) =>
+                              setCompanySettings({
+                                ...companySettings,
+                                timezone: value,
+                              })
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent className="max-h-64">
+                              {africanTimezones.map((tz) => (
+                                <SelectItem key={tz} value={tz}>
+                                  {tz.replace("Africa/", "")}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
                       </div>
-                      <div>
-                        <Label htmlFor="timezone">Fuseau horaire</Label>
-                        <Select
-                          value={companySettings.timezone}
-                          onValueChange={(value) =>
-                            setCompanySettings({
-                              ...companySettings,
-                              timezone: value,
-                            })
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent className="max-h-64">
-                            {africanTimezones.map((tz) => (
-                              <SelectItem key={tz} value={tz}>
-                                {tz.replace("Africa/", "")}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </TabsContent>
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+              )}
 
               <TabsContent value="notifications" className="space-y-6">
                 <Card>
@@ -1025,86 +975,87 @@ export default function SettingsPage() {
                 </Card>
               </TabsContent>
 
-              <TabsContent value="backup" className="space-y-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center">
-                      <Database className="h-5 w-5 mr-2" />
-                      Sauvegarde automatique
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-0.5">
-                        <Label>Sauvegarde automatique</Label>
-                        <p className="text-sm text-gray-600 dark:text-gray-300">
-                          Sauvegarder automatiquement vos données
-                        </p>
+              {userRole === "admin" && (
+                <TabsContent value="backup" className="space-y-6">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center">
+                        <Database className="h-5 w-5 mr-2" />
+                        Sauvegarde automatique
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-0.5">
+                          <Label>Sauvegarde automatique</Label>
+                          <p className="text-sm text-gray-600 dark:text-gray-300">
+                            Sauvegarder automatiquement vos données
+                          </p>
+                        </div>
+                        <Switch
+                          checked={backupSettings.auto_backup}
+                          onCheckedChange={(checked) =>
+                            setBackupSettings({
+                              ...backupSettings,
+                              auto_backup: checked,
+                            })
+                          }
+                        />
                       </div>
-                      <Switch
-                        checked={backupSettings.auto_backup}
-                        onCheckedChange={(checked) =>
-                          setBackupSettings({
-                            ...backupSettings,
-                            auto_backup: checked,
-                          })
-                        }
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="backupFrequency">
-                        Fréquence de sauvegarde
-                      </Label>
-                      <Select
-                        value={backupSettings.backup_frequency}
-                        onValueChange={(value) =>
-                          setBackupSettings({
-                            ...backupSettings,
-                            backup_frequency: value,
-                          })
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="hourly">
-                            Toutes les heures
-                          </SelectItem>
-                          <SelectItem value="daily">Quotidienne</SelectItem>
-                          <SelectItem value="weekly">Hebdomadaire</SelectItem>
-                          <SelectItem value="monthly">Mensuelle</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="pt-4 flex gap-4">
-                      <Button
-                        onClick={saveBackupSettings}
-                        disabled={saving}
-                        className="bg-blue-600 hover:bg-blue-700"
-                      >
-                        {saving ? (
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        ) : (
-                          <Save className="h-4 w-4 mr-2" />
-                        )}
-                        Sauvegarder les paramètres
-                      </Button>
-                      <Button
-                        onClick={handleManualBackup}
-                        disabled={saving}
-                        variant="outline"
-                      >
-                        {saving ? (
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        ) : null}
-                        Créer une sauvegarde maintenant
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-
+                      <div>
+                        <Label htmlFor="backupFrequency">
+                          Fréquence de sauvegarde
+                        </Label>
+                        <Select
+                          value={backupSettings.backup_frequency}
+                          onValueChange={(value) =>
+                            setBackupSettings({
+                              ...backupSettings,
+                              backup_frequency: value,
+                            })
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="hourly">
+                              Toutes les heures
+                            </SelectItem>
+                            <SelectItem value="daily">Quotidienne</SelectItem>
+                            <SelectItem value="weekly">Hebdomadaire</SelectItem>
+                            <SelectItem value="monthly">Mensuelle</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="pt-4 flex gap-4">
+                        <Button
+                          onClick={saveBackupSettings}
+                          disabled={saving}
+                          className="bg-blue-600 hover:bg-blue-700"
+                        >
+                          {saving ? (
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          ) : (
+                            <Save className="h-4 w-4 mr-2" />
+                          )}
+                          Sauvegarder les paramètres
+                        </Button>
+                        <Button
+                          onClick={handleManualBackup}
+                          disabled={saving}
+                          variant="outline"
+                        >
+                          {saving ? (
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          ) : null}
+                          Créer une sauvegarde maintenant
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+              )}
               <TabsContent value="appearance" className="space-y-6">
                 <Card>
                   <CardHeader>
@@ -1152,41 +1103,43 @@ export default function SettingsPage() {
                   </CardContent>
                 </Card>
               </TabsContent>
-              <TabsContent value="taxe" className="space-y-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center">
-                      <Percent className="h-5 w-5 mr-2" />
-                      Taux et taxes
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div>
-                      <Label htmlFor="tva">TVA</Label>
-                      <Input
-                        id="tva"
-                        type="number"
-                        value={tva}
-                        onChange={(e) => setTva(Number(e.target.value))}
-                      />
-                    </div>
-                    <div className="pt-2">
-                      <Button
-                        onClick={handleTva}
-                        disabled={saving}
-                        className="bg-blue-600 hover:bg-blue-700"
-                      >
-                        {saving ? (
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        ) : (
-                          <Save className="h-4 w-4 mr-2" />
-                        )}
-                        Sauvegarder la TVA
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              </TabsContent>
+              {userRole === "admin" && (
+                <TabsContent value="taxe" className="space-y-6">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center">
+                        <Percent className="h-5 w-5 mr-2" />
+                        Taux et taxes
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div>
+                        <Label htmlFor="tva">TVA</Label>
+                        <Input
+                          id="tva"
+                          type="number"
+                          value={tva}
+                          onChange={(e) => setTva(Number(e.target.value))}
+                        />
+                      </div>
+                      <div className="pt-2">
+                        <Button
+                          onClick={handleTva}
+                          disabled={saving}
+                          className="bg-blue-600 hover:bg-blue-700"
+                        >
+                          {saving ? (
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          ) : (
+                            <Save className="h-4 w-4 mr-2" />
+                          )}
+                          Sauvegarder la TVA
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+              )}
             </Tabs>
           </main>
         </div>

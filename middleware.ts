@@ -135,6 +135,7 @@ export async function middleware(request: NextRequest) {
             '/dashboard',
             '/dashboard/sales',
             '/dashboard/stocks',
+            '/dashboard/settings'
         ],
         user: [
             '/dashboard'
