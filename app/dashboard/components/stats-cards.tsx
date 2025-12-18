@@ -121,12 +121,14 @@ export function StatsCards({ stats, loading, error }: StatsCardsProps) {
                 </div>
                 <Icon className="h-5 w-5 text-gray-400" />
               </div>
-              <div className="text-2xl font-bold text-gray-900 mb-2">
+              <div className="text-2xl font-bold mb-2 text-foreground dark:text-white">
                 {stat.value}
               </div>
               <div
                 className={`text-sm ${
-                  stat.positive ? "text-green-600" : "text-red-600"
+                  stat.positive
+                    ? "text-green-600 dark:text-green-400"
+                    : "text-red-600 dark:text-red-400"
                 }`}
               >
                 {stat.change}

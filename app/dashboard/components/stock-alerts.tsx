@@ -45,7 +45,7 @@ export function StockAlerts({
       </CardHeader>
 
       <CardContent>
-        <div className="space-y-4">
+        <div className="space-y-4 ">
           {alerts?.map((alert, index) => {
             const IconComponent = alert.icon ? ICONS[alert.icon] : undefined;
             const RenderIcon = IconComponent ? (
@@ -57,7 +57,7 @@ export function StockAlerts({
             return (
               <div
                 key={index}
-                className="flex items-center justify-between p-4 border-l-4 border-orange-500 bg-orange-50 rounded-r-lg overflow-auto"
+                className="flex items-center justify-between p-4 border-l-4 border-orange-500 bg-orange-50 rounded-r-lg overflow-auto  dark:bg-gray-600 dark:text-white"
               >
                 <div className="flex items-center space-x-3">
                   <div className="p-2 bg-orange-100 rounded-lg">
@@ -69,10 +69,10 @@ export function StockAlerts({
                       {alert.product}
                     </div>
                     <div>
-                      <div className="font-medium text-gray-900">
+                      <div className="font-medium text-gray-900  dark:text-gray-200">
                         {alert.name}
                       </div>
-                      <div className="text-sm text-gray-500">
+                      <div className="text-sm text-gray-500 dark:text-gray-300">
                         {alert.category}
                       </div>
                     </div>

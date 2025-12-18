@@ -463,8 +463,8 @@ export async function POST(request: NextRequest) {
       const movementQuery = `
         INSERT INTO stock_movements (
           product_id, type, quantity, from_warehouse_id, to_warehouse_id, 
-          reference, user_id, metadata
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+          reference, user_id, metadata, company_id
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         RETURNING *
       `;
 
@@ -487,7 +487,7 @@ export async function POST(request: NextRequest) {
 
       const movementResult = await client.query(movementQuery, [
         productId, movementType, Math.abs(quantity), fromWarehouseIdFinal, toWarehouseIdFinal,
-        reference, Number(userId), metadata
+        reference, Number(userId), metadata, companyId
       ]);
 
       // 2. Mise à jour des stocks selon le type
@@ -511,12 +511,13 @@ export async function POST(request: NextRequest) {
 
         // Mise à jour product_warehouses
         const warehouseStockQuery = `
-          INSERT INTO product_warehouses (product_id, warehouse_id, stock)
-          VALUES ($1, $2, $3)
-          ON CONFLICT (product_id, warehouse_id) 
+          INSERT INTO product_warehouses (product_id, warehouse_id, stock, company_id)
+          VALUES ($1, $2, $3, $4)
+          ON CONFLICT (product_id, warehouse_id)
           DO UPDATE SET stock = $3
         `;
-        await client.query(warehouseStockQuery, [productId, warehouseId, newWarehouseStock]);
+        await client.query(warehouseStockQuery, [productId, warehouseId, newWarehouseStock, companyId]);
+
 
         // Mise à jour products (stock global)
         const globalStockQuery = `
