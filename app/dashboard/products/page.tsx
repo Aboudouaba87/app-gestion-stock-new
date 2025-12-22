@@ -43,6 +43,7 @@ import { Textarea } from "@/app/dashboard/components/ui/textarea";
 import { RoleGuard } from "../components/auth/role-guard";
 import { useDetermineSympole } from "@/lib/useDetermineSympole";
 import { formatCurrency } from "@/lib/formatCurency";
+import { string } from "zod";
 
 type Product = {
   id: number;
@@ -62,7 +63,7 @@ type Product = {
 };
 
 type Warehouse = {
-  id: string;
+  id: number;
   name: string;
 };
 
@@ -129,7 +130,9 @@ export default function ProductsPage() {
     cost_price: "0.00", // 🔥 AJOUT
     supplier: "aucun",
     description: "",
-    warehouse_id: "none",
+    warehouse_name: "Aucun",
+    warehouse_id: 0,
+    status: "",
   });
 
   // Récupération de la monnaie
@@ -214,7 +217,7 @@ export default function ProductsPage() {
       const normalized = Array.isArray(data)
         ? data.map((w: any) => {
             // Utiliser directement la valeur textuelle (main, south, north)
-            const value = w.value || w.id || "unknown";
+            const value = w.id || "unknown";
             const name = w.label || w.name || `Entrepôt ${value}`;
 
             return {
@@ -293,7 +296,9 @@ export default function ProductsPage() {
       cost_price: "", // 🔥 AJOUT
       supplier: "aucun",
       description: "",
-      warehouse_id: "none",
+      warehouse_id: 0,
+      warehouse_name: "",
+      status: "",
     });
   };
 
@@ -360,7 +365,7 @@ export default function ProductsPage() {
             ? "low_stock"
             : "active",
         warehouse_id:
-          formData.warehouse_id === "none" ? null : formData.warehouse_id,
+          formData.warehouse_id === null ? 0 : formData.warehouse_id,
       };
 
       const res = await fetch("/api/products", {
@@ -427,7 +432,7 @@ export default function ProductsPage() {
             : "active",
         // CORRECTION : Bien gérer la valeur "none" vs les valeurs textuelles
         warehouse_id:
-          formData.warehouse_id === "none" ? null : formData.warehouse_id,
+          formData.warehouse_id === null ? 0 : formData.warehouse_id,
         id: selectedProduct?.id,
         product_id: selectedProduct?.id,
       };
@@ -473,7 +478,9 @@ export default function ProductsPage() {
       cost_price: String(product.cost_price ?? 0), // 🔥 AJOUT
       supplier: product.supplier || "aucun",
       description: product.description || "",
-      warehouse_id: "none", // L'utilisateur devra re-sélectionner l'entrepôt
+      warehouse_id: 0, // L'utilisateur devra re-sélectionner l'entrepôt
+      warehouse_name: "",
+      status: "",
     });
 
     console.log(
@@ -862,32 +869,26 @@ export default function ProductsPage() {
                     <div>
                       <Label>Magasin (optionnel)</Label>
                       <Select
-                        value={formData.warehouse_id}
-                        onValueChange={(v) => {
-                          console.log(
-                            "🔄 Warehouse sélectionné:",
-                            v,
-                            "Type:",
-                            typeof v
-                          );
-                          setFormData({ ...formData, warehouse_id: v });
+                        value={String(formData.warehouse_id)}
+                        onValueChange={(value) => {
+                          setFormData({
+                            ...formData,
+                            warehouse_id: Number(value),
+                          });
                         }}
                       >
                         <SelectTrigger>
                           <SelectValue placeholder="Sélectionner un magasin" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="none">Aucun</SelectItem>
+                          <SelectItem value="0">Aucun</SelectItem>
                           {warehouses.map((w) => (
-                            <SelectItem key={w.id} value={w.id}>
+                            <SelectItem key={w.id} value={String(w.id)}>
                               {w.name}
                             </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
-                      <p className="text-xs text-gray-500 mt-1">
-                        Valeur sélectionnée: {formData.warehouse_id}
-                      </p>
                     </div>
 
                     <div>
@@ -1333,16 +1334,16 @@ export default function ProductsPage() {
               <div>
                 <Label>Magasin (optionnel)</Label>
                 <Select
-                  value={formData.warehouse_id}
+                  value={String(formData.warehouse_id)}
                   onValueChange={(v) =>
-                    setFormData({ ...formData, warehouse_id: v })
+                    setFormData({ ...formData, warehouse_id: Number(v) })
                   }
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Sélectionner un magasin" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">Aucun</SelectItem>
+                    <SelectItem value="0">Aucun</SelectItem>
                     {warehouses.map((w) => (
                       <SelectItem key={w.id} value={String(w.id)}>
                         {w.name}

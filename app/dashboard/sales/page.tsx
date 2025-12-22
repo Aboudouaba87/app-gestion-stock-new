@@ -1784,7 +1784,7 @@ export default function SalesPage() {
                                             </span>
                                           </div>
                                           <div className="flex justify-between text-sm">
-                                            <span>TVA ({tva[0]?.taux}%):</span>
+                                            <span>TVA ({Number(tva)}%):</span>
                                             <span>
                                               {formatCurrency(
                                                 Number(

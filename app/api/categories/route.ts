@@ -59,15 +59,17 @@ export async function GET(req: NextRequest) {
                 c.company_id,
                 c.created_at,
                 c.updated_at,
-                (
-                    SELECT COUNT(*) 
-                    FROM product_warehouses pw
-                    WHERE pw.company_id = c.company_id
-                ) AS product_count
+               	COALESCE(pc.product_count, 0) AS product_count
             FROM categories c
             LEFT JOIN categories p 
                 ON c.parent_id = p.id AND p.company_id = c.company_id
+			LEFT JOIN  (
+                    SELECT pw.category_id, COUNT(*) AS product_count
+                    FROM product_warehouses pw
+					GROUP BY pw.category_id
+                ) AS pc On pc.category_id = c.id 
             WHERE c.company_id = $1
+			
             ORDER BY 
                 CASE WHEN c.parent_id IS NULL THEN 0 ELSE 1 END,
                 c.name ASC;
@@ -77,7 +79,7 @@ export async function GET(req: NextRequest) {
         } else {
             result = await pool.query(
                 `
-           SELECT 
+            SELECT 
                 c.id,
                 c.name,
                 COALESCE(c.description, '') AS description,
@@ -87,14 +89,16 @@ export async function GET(req: NextRequest) {
                 c.company_id,
                 c.created_at,
                 c.updated_at,
-                (
-                    SELECT COUNT(*) 
-                    FROM product_warehouses pw
-                    WHERE pw.company_id = c.company_id AND pw.warehouse_id = $1
-                ) AS product_count
+                COALESCE(pc.product_count, 0) AS product_count
             FROM categories c
             LEFT JOIN categories p 
                 ON c.parent_id = p.id AND p.company_id = c.company_id
+			LEFT JOIN  (
+                    SELECT pw.category_id, COUNT(*) AS product_count
+                    FROM product_warehouses pw
+					WHERE pw.warehouse_id = $1
+					GROUP BY pw.category_id
+                ) AS pc On pc.category_id = c.id 
             WHERE c.company_id = $2
             ORDER BY 
                 CASE WHEN c.parent_id IS NULL THEN 0 ELSE 1 END,
