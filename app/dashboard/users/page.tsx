@@ -151,12 +151,12 @@ export default function UsersPage() {
   useEffect(() => {
     const fetchRoles = async () => {
       try {
-        const res = await fetch("/api/roles", { cache: "no-store" });
+        const res = await fetch("/api/type_roles", { cache: "no-store" });
         if (!res.ok) throw new Error("Erreur API rôles");
         const data: Role[] = await res.json();
         setRoles(data);
       } catch (err) {
-        console.error("Erreur fetch roles :", err);
+        console.error("Erreur fetch type_roles :", err);
         toast({
           title: "Erreur",
           description: "Impossible de charger les rôles",
