@@ -51,7 +51,6 @@ import { Textarea } from "@/app/dashboard/components/ui/textarea";
 import { toast } from "sonner";
 import { RoleGuard } from "../components/auth/role-guard";
 import { useSession } from "next-auth/react";
-
 // Types pour les données
 interface StockMovement {
   id: number;
@@ -518,111 +517,89 @@ export default function StocksPage() {
                   Suivez et gérez vos mouvements de stock
                 </p>
               </div>
-              <div className="flex   mt-1 md:mt-0 space-x-2">
-                <Dialog open={isTransferOpen} onOpenChange={setIsTransferOpen}>
-                  {/* Bouton mobile */}
-                  <div className="md:hidden mr-0 pr-0 ml-2 mb-1">
-                    <DialogTrigger asChild>
-                      <Button variant="outline">
-                        <ArrowRightLeft className="h-4 w-4 mr-2" />
-                      </Button>
-                    </DialogTrigger>
-                  </div>
-                  {/* Bouton Ordinateurs */}
-                  <div className="hidden md:block">
-                    <DialogTrigger asChild>
-                      <Button variant="outline">
-                        <ArrowRightLeft className="h-4 w-4 mr-2" />
-                        Transfert
-                      </Button>
-                    </DialogTrigger>
-                  </div>
-                  <DialogContent className="max-w-md">
-                    <DialogHeader>
-                      <DialogTitle>Transfert entre entrepôts</DialogTitle>
-                    </DialogHeader>
-                    <div className="space-y-4">
-                      <div>
-                        <Label htmlFor="trf-product">Produit</Label>
-                        <Select
-                          value={transfer.product}
-                          onValueChange={(value) =>
-                            setTransfer({ ...transfer, product: value })
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Sélectionner un produit" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {products.map((product) => (
-                              <SelectItem
-                                key={product.id}
-                                value={product.id.toString()}
-                              >
-                                {product.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
+              {session?.user.role == "admin" && (
+                <div className="flex   mt-1 md:mt-0 space-x-2">
+                  <Dialog
+                    open={isTransferOpen}
+                    onOpenChange={setIsTransferOpen}
+                  >
+                    {/* Bouton mobile */}
+                    <div className="md:hidden mr-0 pr-0 ml-2 mb-1">
+                      <DialogTrigger asChild>
+                        <Button variant="outline">
+                          <ArrowRightLeft className="h-4 w-4 mr-2" />
+                        </Button>
+                      </DialogTrigger>
+                    </div>
+                    {/* Bouton Ordinateurs */}
+                    <div className="hidden md:block">
+                      <DialogTrigger asChild>
+                        <Button variant="outline">
+                          <ArrowRightLeft className="h-4 w-4 mr-2" />
+                          Transfert
+                        </Button>
+                      </DialogTrigger>
+                    </div>
+                    <DialogContent className="max-w-md">
+                      <DialogHeader>
+                        <DialogTitle>Transfert entre entrepôts</DialogTitle>
+                      </DialogHeader>
+                      <div className="space-y-4">
+                        <div>
+                          <Label htmlFor="trf-product">Produit</Label>
+                          <Select
+                            value={transfer.product}
+                            onValueChange={(value) =>
+                              setTransfer({ ...transfer, product: value })
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Sélectionner un produit" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {products.map((product) => (
+                                <SelectItem
+                                  key={product.id}
+                                  value={product.id.toString()}
+                                >
+                                  {product.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
 
-                      <div>
-                        <Label htmlFor="trf-quantity">
-                          Quantité à transférer
-                        </Label>
-                        <Input
-                          id="trf-quantity"
-                          type="number"
-                          value={transfer.quantity}
-                          onChange={(e) =>
-                            setTransfer({
-                              ...transfer,
-                              quantity: e.target.value,
-                            })
-                          }
-                          placeholder="Quantité"
-                        />
-                      </div>
+                        <div>
+                          <Label htmlFor="trf-quantity">
+                            Quantité à transférer
+                          </Label>
+                          <Input
+                            id="trf-quantity"
+                            type="number"
+                            value={transfer.quantity}
+                            onChange={(e) =>
+                              setTransfer({
+                                ...transfer,
+                                quantity: e.target.value,
+                              })
+                            }
+                            placeholder="Quantité"
+                          />
+                        </div>
 
-                      <div>
-                        <Label htmlFor="trf-from">Entrepôt source</Label>
-                        <Select
-                          value={transfer.warehouseFrom}
-                          onValueChange={(value) =>
-                            setTransfer({ ...transfer, warehouseFrom: value })
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Depuis quel entrepôt ?" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {warehouses.map((warehouse) => (
-                              <SelectItem
-                                key={warehouse.id}
-                                value={warehouse.id}
-                              >
-                                {warehouse.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div>
-                        <Label htmlFor="trf-to">Entrepôt destination</Label>
-                        <Select
-                          value={transfer.warehouseTo}
-                          onValueChange={(value) =>
-                            setTransfer({ ...transfer, warehouseTo: value })
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Vers quel entrepôt ?" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {warehouses
-                              .filter((w) => w.id !== transfer.warehouseFrom)
-                              .map((warehouse) => (
+                        <div>
+                          <Label htmlFor="trf-from">Entrepôt source</Label>
+                          <Select
+                            value={transfer.warehouseFrom}
+                            onValueChange={(value) =>
+                              setTransfer({ ...transfer, warehouseFrom: value })
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Depuis quel entrepôt ?" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {warehouses.map((warehouse) => (
                                 <SelectItem
                                   key={warehouse.id}
                                   value={warehouse.id}
@@ -630,393 +607,428 @@ export default function StocksPage() {
                                   {warehouse.name}
                                 </SelectItem>
                               ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
+                            </SelectContent>
+                          </Select>
+                        </div>
 
-                      <div>
-                        <Label htmlFor="trf-reference">
-                          Référence (optionnel)
-                        </Label>
-                        <Input
-                          id="trf-reference"
-                          value={transfer.reference}
-                          onChange={(e) =>
-                            setTransfer({
-                              ...transfer,
-                              reference: e.target.value,
-                            })
-                          }
-                          placeholder="TRF-001..."
-                        />
-                      </div>
-
-                      <div>
-                        <Label htmlFor="trf-reason">Motif du transfert</Label>
-                        <Textarea
-                          id="trf-reason"
-                          value={transfer.reason}
-                          onChange={(e) =>
-                            setTransfer({ ...transfer, reason: e.target.value })
-                          }
-                          placeholder="Réapprovisionnement, réorganisation..."
-                        />
-                      </div>
-
-                      <div className="flex justify-end space-x-2 pt-4 border-t">
-                        <Button
-                          variant="outline"
-                          onClick={() => setIsTransferOpen(false)}
-                        >
-                          Annuler
-                        </Button>
-                        <Button
-                          onClick={handleTransfer}
-                          className="bg-purple-600 hover:bg-purple-700"
-                          disabled={
-                            !transfer.product ||
-                            !transfer.quantity ||
-                            !transfer.warehouseFrom ||
-                            !transfer.warehouseTo
-                          }
-                        >
-                          <ArrowRightLeft className="h-4 w-4 mr-2" />
-                          Effectuer le transfert
-                        </Button>
-                      </div>
-                    </div>
-                  </DialogContent>
-                </Dialog>
-
-                <Dialog
-                  open={isAdjustmentOpen}
-                  onOpenChange={setIsAdjustmentOpen}
-                >
-                  {/* Bouton Mobile */}
-                  <div className="md:hidden mr-0 pr-0 mb-1">
-                    <DialogTrigger asChild>
-                      <Button variant="outline">
-                        <ArrowUpDown className="h-4 w-4 mr-2" />
-                      </Button>
-                    </DialogTrigger>
-                  </div>
-                  {/* Bouton ordinateurs */}
-                  <div className="hidden md:block">
-                    <DialogTrigger asChild>
-                      <Button variant="outline">
-                        <ArrowUpDown className="h-4 w-4 mr-2" />
-                        Ajustement
-                      </Button>
-                    </DialogTrigger>
-                  </div>
-                  <DialogContent className="max-w-md">
-                    <DialogHeader>
-                      <DialogTitle>Ajustement de stock</DialogTitle>
-                    </DialogHeader>
-                    <div className="space-y-4">
-                      <div>
-                        <Label htmlFor="adj-product">Produit</Label>
-                        <Select
-                          value={adjustment.product}
-                          onValueChange={(value) => {
-                            const product = products.find(
-                              (p) => p.id === Number.parseInt(value)
-                            );
-                            setAdjustment({
-                              ...adjustment,
-                              product: value,
-                              currentStock: product
-                                ? product.stock.toString()
-                                : "",
-                            });
-                          }}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Sélectionner un produit" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {products.map((product) => (
-                              <SelectItem
-                                key={product.id}
-                                value={product.id.toString()}
-                              >
-                                {product.name} (Stock: {product.stock})
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div>
-                        <Label htmlFor="adj-warehouse">Entrepôt</Label>
-                        <Select
-                          value={adjustment.warehouse}
-                          onValueChange={(value) =>
-                            setAdjustment({ ...adjustment, warehouse: value })
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Sélectionner un entrepôt" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {warehouses.map((warehouse) => (
-                              <SelectItem
-                                key={warehouse.id}
-                                value={warehouse.id}
-                              >
-                                {warehouse.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <Label htmlFor="current-stock">Stock théorique</Label>
+                          <Label htmlFor="trf-to">Entrepôt destination</Label>
+                          <Select
+                            value={transfer.warehouseTo}
+                            onValueChange={(value) =>
+                              setTransfer({ ...transfer, warehouseTo: value })
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Vers quel entrepôt ?" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {warehouses
+                                .filter((w) => w.id !== transfer.warehouseFrom)
+                                .map((warehouse) => (
+                                  <SelectItem
+                                    key={warehouse.id}
+                                    value={warehouse.id}
+                                  >
+                                    {warehouse.name}
+                                  </SelectItem>
+                                ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div>
+                          <Label htmlFor="trf-reference">
+                            Référence (optionnel)
+                          </Label>
                           <Input
-                            id="current-stock"
-                            type="number"
-                            value={adjustment.currentStock}
-                            readOnly
-                            className="bg-gray-50"
+                            id="trf-reference"
+                            value={transfer.reference}
+                            onChange={(e) =>
+                              setTransfer({
+                                ...transfer,
+                                reference: e.target.value,
+                              })
+                            }
+                            placeholder="TRF-001..."
                           />
                         </div>
+
                         <div>
-                          <Label htmlFor="real-stock">Stock réel</Label>
-                          <Input
-                            id="real-stock"
-                            type="number"
-                            value={adjustment.realStock}
+                          <Label htmlFor="trf-reason">Motif du transfert</Label>
+                          <Textarea
+                            id="trf-reason"
+                            value={transfer.reason}
+                            onChange={(e) =>
+                              setTransfer({
+                                ...transfer,
+                                reason: e.target.value,
+                              })
+                            }
+                            placeholder="Réapprovisionnement, réorganisation..."
+                          />
+                        </div>
+
+                        <div className="flex justify-end space-x-2 pt-4 border-t">
+                          <Button
+                            variant="outline"
+                            onClick={() => setIsTransferOpen(false)}
+                          >
+                            Annuler
+                          </Button>
+                          <Button
+                            onClick={handleTransfer}
+                            className="bg-purple-600 hover:bg-purple-700"
+                            disabled={
+                              !transfer.product ||
+                              !transfer.quantity ||
+                              !transfer.warehouseFrom ||
+                              !transfer.warehouseTo
+                            }
+                          >
+                            <ArrowRightLeft className="h-4 w-4 mr-2" />
+                            Effectuer le transfert
+                          </Button>
+                        </div>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+
+                  <Dialog
+                    open={isAdjustmentOpen}
+                    onOpenChange={setIsAdjustmentOpen}
+                  >
+                    {/* Bouton Mobile */}
+                    <div className="md:hidden mr-0 pr-0 mb-1">
+                      <DialogTrigger asChild>
+                        <Button variant="outline">
+                          <ArrowUpDown className="h-4 w-4 mr-2" />
+                        </Button>
+                      </DialogTrigger>
+                    </div>
+                    {/* Bouton ordinateurs */}
+                    <div className="hidden md:block">
+                      <DialogTrigger asChild>
+                        <Button variant="outline">
+                          <ArrowUpDown className="h-4 w-4 mr-2" />
+                          Ajustement
+                        </Button>
+                      </DialogTrigger>
+                    </div>
+                    <DialogContent className="max-w-md">
+                      <DialogHeader>
+                        <DialogTitle>Ajustement de stock</DialogTitle>
+                      </DialogHeader>
+                      <div className="space-y-4">
+                        <div>
+                          <Label htmlFor="adj-product">Produit</Label>
+                          <Select
+                            value={adjustment.product}
+                            onValueChange={(value) => {
+                              const product = products.find(
+                                (p) => p.id === Number.parseInt(value)
+                              );
+                              setAdjustment({
+                                ...adjustment,
+                                product: value,
+                                currentStock: product
+                                  ? product.stock.toString()
+                                  : "",
+                              });
+                            }}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Sélectionner un produit" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {products.map((product) => (
+                                <SelectItem
+                                  key={product.id}
+                                  value={product.id.toString()}
+                                >
+                                  {product.name} (Stock: {product.stock})
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div>
+                          <Label htmlFor="adj-warehouse">Entrepôt</Label>
+                          <Select
+                            value={adjustment.warehouse}
+                            onValueChange={(value) =>
+                              setAdjustment({ ...adjustment, warehouse: value })
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Sélectionner un entrepôt" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {warehouses.map((warehouse) => (
+                                <SelectItem
+                                  key={warehouse.id}
+                                  value={warehouse.id}
+                                >
+                                  {warehouse.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <Label htmlFor="current-stock">
+                              Stock théorique
+                            </Label>
+                            <Input
+                              id="current-stock"
+                              type="number"
+                              value={adjustment.currentStock}
+                              readOnly
+                              className="bg-gray-50"
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="real-stock">Stock réel</Label>
+                            <Input
+                              id="real-stock"
+                              type="number"
+                              value={adjustment.realStock}
+                              onChange={(e) =>
+                                setAdjustment({
+                                  ...adjustment,
+                                  realStock: e.target.value,
+                                })
+                              }
+                              placeholder="Stock compté"
+                            />
+                          </div>
+                        </div>
+
+                        {adjustment.currentStock && adjustment.realStock && (
+                          <div className="p-3 bg-blue-50 rounded-lg">
+                            <p className="text-sm text-blue-800">
+                              <strong>Différence :</strong>{" "}
+                              {Number.parseInt(adjustment.realStock) -
+                                Number.parseInt(adjustment.currentStock) >
+                              0
+                                ? "+"
+                                : ""}
+                              {Number.parseInt(adjustment.realStock) -
+                                Number.parseInt(adjustment.currentStock)}
+                            </p>
+                          </div>
+                        )}
+
+                        <div>
+                          <Label htmlFor="adj-reason">Motif</Label>
+                          <Textarea
+                            id="adj-reason"
+                            value={adjustment.reason}
                             onChange={(e) =>
                               setAdjustment({
                                 ...adjustment,
-                                realStock: e.target.value,
+                                reason: e.target.value,
                               })
                             }
-                            placeholder="Stock compté"
+                            placeholder="Motif de l'ajustement..."
                           />
                         </div>
-                      </div>
 
-                      {adjustment.currentStock && adjustment.realStock && (
-                        <div className="p-3 bg-blue-50 rounded-lg">
-                          <p className="text-sm text-blue-800">
-                            <strong>Différence :</strong>{" "}
-                            {Number.parseInt(adjustment.realStock) -
-                              Number.parseInt(adjustment.currentStock) >
-                            0
-                              ? "+"
-                              : ""}
-                            {Number.parseInt(adjustment.realStock) -
-                              Number.parseInt(adjustment.currentStock)}
-                          </p>
+                        <div className="flex justify-end space-x-2 pt-4 border-t">
+                          <Button
+                            variant="outline"
+                            onClick={() => setIsAdjustmentOpen(false)}
+                          >
+                            Annuler
+                          </Button>
+                          <Button
+                            onClick={handleAdjustment}
+                            className="bg-blue-600 hover:bg-blue-700"
+                            disabled={
+                              !adjustment.product ||
+                              !adjustment.warehouse ||
+                              !adjustment.realStock
+                            }
+                          >
+                            <ArrowUpDown className="h-4 w-4 mr-2" />
+                            Effectuer l'ajustement
+                          </Button>
                         </div>
-                      )}
-
-                      <div>
-                        <Label htmlFor="adj-reason">Motif</Label>
-                        <Textarea
-                          id="adj-reason"
-                          value={adjustment.reason}
-                          onChange={(e) =>
-                            setAdjustment({
-                              ...adjustment,
-                              reason: e.target.value,
-                            })
-                          }
-                          placeholder="Motif de l'ajustement..."
-                        />
                       </div>
+                    </DialogContent>
+                  </Dialog>
 
-                      <div className="flex justify-end space-x-2 pt-4 border-t">
-                        <Button
-                          variant="outline"
-                          onClick={() => setIsAdjustmentOpen(false)}
-                        >
-                          Annuler
+                  <Dialog
+                    open={isNewMovementOpen}
+                    onOpenChange={setIsNewMovementOpen}
+                  >
+                    {/* Bouton mobile */}
+                    <div className="md:hidden mr-0 pr-0">
+                      <DialogTrigger asChild>
+                        <Button className="bg-blue-600 hover:bg-blue-700">
+                          <Plus className="h-4 w-4 mr-2" />
                         </Button>
-                        <Button
-                          onClick={handleAdjustment}
-                          className="bg-blue-600 hover:bg-blue-700"
-                          disabled={
-                            !adjustment.product ||
-                            !adjustment.warehouse ||
-                            !adjustment.realStock
-                          }
-                        >
-                          <ArrowUpDown className="h-4 w-4 mr-2" />
-                          Effectuer l'ajustement
-                        </Button>
-                      </div>
+                      </DialogTrigger>
                     </div>
-                  </DialogContent>
-                </Dialog>
-
-                <Dialog
-                  open={isNewMovementOpen}
-                  onOpenChange={setIsNewMovementOpen}
-                >
-                  {/* Bouton mobile */}
-                  <div className="md:hidden mr-0 pr-0">
-                    <DialogTrigger asChild>
-                      <Button className="bg-blue-600 hover:bg-blue-700">
-                        <Plus className="h-4 w-4 mr-2" />
-                      </Button>
-                    </DialogTrigger>
-                  </div>
-                  {/* Bouton ordinateurs */}
-                  <div className="hidden md:block">
-                    <DialogTrigger asChild>
-                      <Button className="bg-blue-600 hover:bg-blue-700">
-                        <Plus className="h-4 w-4 mr-2" />
-                        Nouveau mouvement
-                      </Button>
-                    </DialogTrigger>
-                  </div>
-                  <DialogContent className="max-w-md">
-                    <DialogHeader>
-                      <DialogTitle>Nouveau mouvement de stock</DialogTitle>
-                    </DialogHeader>
-                    <div className="space-y-4">
-                      <div>
-                        <Label htmlFor="mov-product">Produit</Label>
-                        <Select
-                          value={newMovement.product}
-                          onValueChange={(value) =>
-                            setNewMovement({ ...newMovement, product: value })
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Sélectionner un produit" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {products.map((product) => (
-                              <SelectItem
-                                key={product.id}
-                                value={product.id.toString()}
-                              >
-                                {product.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div>
-                        <Label htmlFor="mov-type">Type de mouvement</Label>
-                        <Select
-                          value={newMovement.type}
-                          onValueChange={(value) =>
-                            setNewMovement({ ...newMovement, type: value })
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="entry">Entrée</SelectItem>
-                            <SelectItem value="exit">Sortie</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div>
-                        <Label htmlFor="mov-quantity">Quantité</Label>
-                        <Input
-                          id="mov-quantity"
-                          type="number"
-                          value={newMovement.quantity}
-                          onChange={(e) =>
-                            setNewMovement({
-                              ...newMovement,
-                              quantity: e.target.value,
-                            })
-                          }
-                          placeholder="Quantité"
-                        />
-                      </div>
-
-                      <div>
-                        <Label htmlFor="mov-warehouse">Entrepôt</Label>
-                        <Select
-                          value={newMovement.warehouse}
-                          onValueChange={(value) =>
-                            setNewMovement({ ...newMovement, warehouse: value })
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Sélectionner un entrepôt" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {warehouses.map((warehouse) => (
-                              <SelectItem
-                                key={warehouse.id}
-                                value={warehouse.id}
-                              >
-                                {warehouse.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div>
-                        <Label htmlFor="mov-reference">
-                          Référence (optionnel)
-                        </Label>
-                        <Input
-                          id="mov-reference"
-                          value={newMovement.reference}
-                          onChange={(e) =>
-                            setNewMovement({
-                              ...newMovement,
-                              reference: e.target.value,
-                            })
-                          }
-                          placeholder="BON-001, CMD-123..."
-                        />
-                      </div>
-
-                      <div>
-                        <Label htmlFor="mov-reason">Motif</Label>
-                        <Textarea
-                          id="mov-reason"
-                          value={newMovement.reason}
-                          onChange={(e) =>
-                            setNewMovement({
-                              ...newMovement,
-                              reason: e.target.value,
-                            })
-                          }
-                          placeholder="Motif du mouvement..."
-                        />
-                      </div>
-
-                      <div className="flex justify-end space-x-2 pt-4 border-t">
-                        <Button
-                          variant="outline"
-                          onClick={() => setIsNewMovementOpen(false)}
-                        >
-                          Annuler
+                    {/* Bouton ordinateurs */}
+                    <div className="hidden md:block">
+                      <DialogTrigger asChild>
+                        <Button className="bg-blue-600 hover:bg-blue-700">
+                          <Plus className="h-4 w-4 mr-2" />
+                          Nouveau mouvement
                         </Button>
-                        <Button
-                          onClick={handleAddMovement}
-                          className="bg-green-600 hover:bg-green-700"
-                          disabled={
-                            !newMovement.product ||
-                            !newMovement.quantity ||
-                            !newMovement.warehouse
-                          }
-                        >
-                          <Package className="h-4 w-4 mr-2" />
-                          Enregistrer le mouvement
-                        </Button>
-                      </div>
+                      </DialogTrigger>
                     </div>
-                  </DialogContent>
-                </Dialog>
-              </div>
+                    <DialogContent className="max-w-md">
+                      <DialogHeader>
+                        <DialogTitle>Nouveau mouvement de stock</DialogTitle>
+                      </DialogHeader>
+                      <div className="space-y-4">
+                        <div>
+                          <Label htmlFor="mov-product">Produit</Label>
+                          <Select
+                            value={newMovement.product}
+                            onValueChange={(value) =>
+                              setNewMovement({ ...newMovement, product: value })
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Sélectionner un produit" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {products.map((product) => (
+                                <SelectItem
+                                  key={product.id}
+                                  value={product.id.toString()}
+                                >
+                                  {product.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div>
+                          <Label htmlFor="mov-type">Type de mouvement</Label>
+                          <Select
+                            value={newMovement.type}
+                            onValueChange={(value) =>
+                              setNewMovement({ ...newMovement, type: value })
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="entry">Entrée</SelectItem>
+                              <SelectItem value="exit">Sortie</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div>
+                          <Label htmlFor="mov-quantity">Quantité</Label>
+                          <Input
+                            id="mov-quantity"
+                            type="number"
+                            value={newMovement.quantity}
+                            onChange={(e) =>
+                              setNewMovement({
+                                ...newMovement,
+                                quantity: e.target.value,
+                              })
+                            }
+                            placeholder="Quantité"
+                          />
+                        </div>
+
+                        <div>
+                          <Label htmlFor="mov-warehouse">Entrepôt</Label>
+                          <Select
+                            value={newMovement.warehouse}
+                            onValueChange={(value) =>
+                              setNewMovement({
+                                ...newMovement,
+                                warehouse: value,
+                              })
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Sélectionner un entrepôt" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {warehouses.map((warehouse) => (
+                                <SelectItem
+                                  key={warehouse.id}
+                                  value={warehouse.id}
+                                >
+                                  {warehouse.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div>
+                          <Label htmlFor="mov-reference">
+                            Référence (optionnel)
+                          </Label>
+                          <Input
+                            id="mov-reference"
+                            value={newMovement.reference}
+                            onChange={(e) =>
+                              setNewMovement({
+                                ...newMovement,
+                                reference: e.target.value,
+                              })
+                            }
+                            placeholder="BON-001, CMD-123..."
+                          />
+                        </div>
+
+                        <div>
+                          <Label htmlFor="mov-reason">Motif</Label>
+                          <Textarea
+                            id="mov-reason"
+                            value={newMovement.reason}
+                            onChange={(e) =>
+                              setNewMovement({
+                                ...newMovement,
+                                reason: e.target.value,
+                              })
+                            }
+                            placeholder="Motif du mouvement..."
+                          />
+                        </div>
+
+                        <div className="flex justify-end space-x-2 pt-4 border-t">
+                          <Button
+                            variant="outline"
+                            onClick={() => setIsNewMovementOpen(false)}
+                          >
+                            Annuler
+                          </Button>
+                          <Button
+                            onClick={handleAddMovement}
+                            className="bg-green-600 hover:bg-green-700"
+                            disabled={
+                              !newMovement.product ||
+                              !newMovement.quantity ||
+                              !newMovement.warehouse
+                            }
+                          >
+                            <Package className="h-4 w-4 mr-2" />
+                            Enregistrer le mouvement
+                          </Button>
+                        </div>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                </div>
+              )}
             </div>
           </header>
 
